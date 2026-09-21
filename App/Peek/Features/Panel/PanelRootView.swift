@@ -6,6 +6,7 @@ struct PanelRootView: View {
 
     @Bindable var model: PanelViewModel
     @FocusState private var promptFocused: Bool
+    @State private var composerHeight: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -213,12 +214,14 @@ struct PanelRootView: View {
                 .help("Attach a screenshot")
                 .accessibilityLabel("Attach a screenshot")
 
-                TextField(placeholder, text: $model.prompt, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .lineLimit(1...6)
-                    .focused($promptFocused)
-                    .onSubmit(send)
+                PromptEditor(text: $model.prompt,
+                             minHeight: 20,
+                             maxHeight: 110,
+                             placeholder: placeholder,
+                             font: .systemFont(ofSize: 13),
+                             onSubmit: send,
+                             measuredHeight: $composerHeight)
+                    .frame(height: composerHeight)
 
                 if model.canSend {
                     Button(action: send) {
@@ -253,7 +256,6 @@ struct PanelRootView: View {
 
     private func send() {
         model.send()
-        promptFocused = true
     }
 }
 
