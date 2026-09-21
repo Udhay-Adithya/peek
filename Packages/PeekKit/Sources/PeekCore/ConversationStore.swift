@@ -10,12 +10,21 @@ public struct PersistedMessage: Sendable, Identifiable, Equatable {
     public var role: ChatMessage.Role
     public var text: String
     public var createdAt: Date
+    /// Images sent with this turn. Persisted so reopening a conversation shows
+    /// what was actually asked about, rather than a question with its subject
+    /// silently missing.
+    public var attachments: [ImageAttachment]
 
-    public init(id: UUID = UUID(), role: ChatMessage.Role, text: String, createdAt: Date = .now) {
+    public init(id: UUID = UUID(),
+                role: ChatMessage.Role,
+                text: String,
+                createdAt: Date = .now,
+                attachments: [ImageAttachment] = []) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
+        self.attachments = attachments
     }
 }
 

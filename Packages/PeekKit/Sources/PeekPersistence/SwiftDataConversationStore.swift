@@ -34,6 +34,14 @@ public actor SwiftDataConversationStore: ConversationStore {
                                    createdAt: message.createdAt)
         stored.conversation = conversation
         modelContext.insert(stored)
+
+        for attachment in message.attachments {
+            let storedAttachment = StoredAttachment(mimeType: attachment.mimeType,
+                                                    data: attachment.data)
+            storedAttachment.message = stored
+            modelContext.insert(storedAttachment)
+        }
+
         conversation.updatedAt = message.createdAt
         try modelContext.save()
     }
@@ -65,8 +73,17 @@ public actor SwiftDataConversationStore: ConversationStore {
         let conversation = try require(id)
         return (conversation.messages ?? [])
             .sorted { $0.createdAt < $1.createdAt }
-            .map { PersistedMessage(id: $0.identifier, role: $0.role,
-                                    text: $0.text, createdAt: $0.createdAt) }
+            .map { stored in
+                PersistedMessage(
+                    id: stored.identifier,
+                    role: stored.role,
+                    text: stored.text,
+                    createdAt: stored.createdAt,
+                    attachments: (stored.attachments ?? []).map {
+                        ImageAttachment(mimeType: $0.mimeType, data: $0.data)
+                    }
+                )
+            }
     }
 
     /// Substring search over titles and message bodies.

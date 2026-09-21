@@ -3,7 +3,7 @@ import SwiftData
 
 public enum PeekModelContainer {
 
-    public static let schema = Schema([StoredConversation.self, StoredMessage.self])
+    public static let schema = Schema([StoredConversation.self, StoredMessage.self, StoredAttachment.self])
 
     /// The on-disk store, under Application Support.
     ///

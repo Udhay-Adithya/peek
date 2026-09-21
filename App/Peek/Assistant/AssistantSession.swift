@@ -86,7 +86,9 @@ final class AssistantSession {
         )
         lastRequest = request
 
-        persist(PersistedMessage(role: .user, text: messages.last?.text ?? visible),
+        persist(PersistedMessage(role: .user,
+                                 text: messages.last?.text ?? visible,
+                                 attachments: attachments),
                 title: PromptComposer.title(fromPrompt: prompt, context: context),
                 sourceAppName: context?.sourceAppName)
 
@@ -98,8 +100,13 @@ final class AssistantSession {
         cancel()
         do {
             let stored = try await store.messages(in: id)
+            // Attachment *counts* are restored, not the images themselves: a
+            // long conversation would otherwise pull every screenshot it ever
+            // contained back into memory just to show a transcript.
             messages = stored.map {
-                DisplayMessage(role: $0.role, text: $0.text)
+                DisplayMessage(role: $0.role,
+                               text: $0.text,
+                               attachmentCount: $0.attachments.count)
             }
             conversationID = id
             lastRequest = nil

@@ -56,6 +56,9 @@ final class StoredMessage {
     var createdAt: Date = Date.now
     var conversation: StoredConversation?
 
+    @Relationship(deleteRule: .cascade, inverse: \StoredAttachment.message)
+    var attachments: [StoredAttachment]? = []
+
     init(identifier: UUID = UUID(),
          role: ChatMessage.Role,
          text: String,
@@ -68,5 +71,28 @@ final class StoredMessage {
 
     var role: ChatMessage.Role {
         ChatMessage.Role(rawValue: roleRaw) ?? .assistant
+    }
+}
+
+/// An image sent with a message.
+///
+/// The bytes use `.externalStorage`, so SwiftData spills them to files beside
+/// the store instead of inflating the database with hundreds of kilobytes per
+/// screenshot — and a conversation list query never has to read them.
+@Model
+final class StoredAttachment {
+
+    var identifier: UUID = UUID()
+    var mimeType: String = "image/jpeg"
+
+    @Attribute(.externalStorage)
+    var data: Data = Data()
+
+    var message: StoredMessage?
+
+    init(identifier: UUID = UUID(), mimeType: String, data: Data) {
+        self.identifier = identifier
+        self.mimeType = mimeType
+        self.data = data
     }
 }

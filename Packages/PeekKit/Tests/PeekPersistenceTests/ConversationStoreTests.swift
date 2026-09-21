@@ -8,7 +8,10 @@ import PeekCore
 /// Deliberately not a hand-written fake: SwiftData's own behaviour — cascade
 /// deletes, predicate semantics, relationship ordering — is exactly what would
 /// break, and a fake would happily agree with whatever I assumed.
-@Suite("SwiftDataConversationStore")
+/// Serialized: swift-testing runs suites in parallel by default, and standing
+/// up many SwiftData `ModelContainer`s concurrently crashes inside the
+/// framework. Each test still gets its own fresh in-memory container.
+@Suite("SwiftDataConversationStore", .serialized)
 struct ConversationStoreTests {
 
     private func makeStore() throws -> SwiftDataConversationStore {
@@ -182,5 +185,68 @@ struct ConversationStoreTests {
     @Test("returns nil when there are no conversations at all")
     func noConversations() async throws {
         #expect(try await makeStore().mostRecentConversation(updatedWithin: 600) == nil)
+    }
+}
+
+@Suite("Conversation attachments", .serialized)
+struct ConversationAttachmentTests {
+
+    private func makeStore() throws -> SwiftDataConversationStore {
+        SwiftDataConversationStore(modelContainer: try PeekModelContainer.makeInMemory())
+    }
+
+    private let jpeg = ImageAttachment(mimeType: "image/jpeg", data: Data([0xFF, 0xD8, 0xFF, 0xE0]))
+
+    @Test("round-trips an image attached to a message")
+    func roundTripsAttachment() async throws {
+        let store = try makeStore()
+        let id = try await store.createConversation(title: "screenshot",
+                                                    providerID: "gemini",
+                                                    modelID: "m",
+                                                    sourceAppName: nil)
+        try await store.appendMessage(
+            .init(role: .user, text: "what is this", attachments: [jpeg]), to: id
+        )
+
+        let messages = try await store.messages(in: id)
+        #expect(messages.count == 1)
+        #expect(messages[0].attachments.count == 1)
+        #expect(messages[0].attachments[0].mimeType == "image/jpeg")
+        #expect(messages[0].attachments[0].data == jpeg.data)
+    }
+
+    @Test("a message without attachments round-trips as empty, not nil")
+    func handlesNoAttachments() async throws {
+        let store = try makeStore()
+        let id = try await store.createConversation(title: "text only", providerID: "g",
+                                                    modelID: "m", sourceAppName: nil)
+        try await store.appendMessage(.init(role: .user, text: "hello"), to: id)
+        #expect(try await store.messages(in: id)[0].attachments.isEmpty)
+    }
+
+    @Test("persists several attachments on one turn in order")
+    func handlesMultipleAttachments() async throws {
+        let store = try makeStore()
+        let id = try await store.createConversation(title: "two shots", providerID: "g",
+                                                    modelID: "m", sourceAppName: nil)
+        let second = ImageAttachment(mimeType: "image/png", data: Data([0x89, 0x50]))
+        try await store.appendMessage(
+            .init(role: .user, text: "compare these", attachments: [jpeg, second]), to: id
+        )
+        let stored = try await store.messages(in: id)[0].attachments
+        #expect(stored.count == 2)
+        #expect(Set(stored.map(\.mimeType)) == ["image/jpeg", "image/png"])
+    }
+
+    @Test("deleting a conversation cascades through messages to attachments")
+    func deleteCascadesToAttachments() async throws {
+        // Two cascade hops. An orphaned blob would leak disk space
+        // indefinitely, and it holds a screenshot of the user's screen.
+        let store = try makeStore()
+        let id = try await store.createConversation(title: "x", providerID: "g",
+                                                    modelID: "m", sourceAppName: nil)
+        try await store.appendMessage(.init(role: .user, text: "x", attachments: [jpeg]), to: id)
+        try await store.deleteConversation(id)
+        #expect(try await store.recentConversations(limit: 10).isEmpty)
     }
 }
