@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @Bindable var settings: AppSettings
     let engine: AssistantEngine
+    @Bindable var usage: UsageStatisticsViewModel
 
     @State private var keyInput: String = ""
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -94,6 +95,14 @@ struct SettingsView: View {
             }
             }
 
+            Section("Usage") {
+                UsageStatisticsView(model: usage)
+                    .padding(.vertical, 4)
+                Text("Counted from stored conversations, so deleting a conversation removes its usage too. Nothing is reported anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("General") {
                 Toggle("Launch Peek at login", isOn: Binding(
                     get: { launchAtLogin },
@@ -164,7 +173,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(maxWidth: 560)
+        .frame(maxWidth: 720)
+        .onAppear { usage.reload() }
     }
 
     private func save() {

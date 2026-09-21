@@ -13,6 +13,7 @@ struct MainWindowView: View {
     @Bindable var history: HistoryViewModel
     @Bindable var router: MainWindowRouter
     @Bindable var settings: AppSettings
+    @Bindable var usage: UsageStatisticsViewModel
     let engine: AssistantEngine
 
     @State private var prompt: String = ""
@@ -163,7 +164,7 @@ struct MainWindowView: View {
     /// Settings rendered inside the window, rather than in a window of its own.
     private var settingsPane: some View {
         ScrollView {
-            SettingsView(settings: settings, engine: engine)
+            SettingsView(settings: settings, engine: engine, usage: usage)
                 .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

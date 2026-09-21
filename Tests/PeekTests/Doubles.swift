@@ -104,6 +104,18 @@ actor RecordingStore: ConversationStore {
         }
     }
 
+    func usageStatistics(lastDays days: Int, calendar: Calendar) throws -> UsageStatistics {
+        let turns = messages.values.flatMap { $0 }.filter { $0.outputTokens != nil }
+        return UsageStatistics(
+            totalInputTokens: turns.reduce(0) { $0 + ($1.inputTokens ?? 0) },
+            totalOutputTokens: turns.reduce(0) { $0 + ($1.outputTokens ?? 0) },
+            assistantTurns: turns.count,
+            conversationCount: conversations.count,
+            days: [],
+            models: []
+        )
+    }
+
     /// Seeds a conversation that looks recent and came from `app`.
     func seedRecent(title: String, sourceAppName: String?) throws -> ConversationID {
         let id = try createConversation(title: title, providerID: "stub",
