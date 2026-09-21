@@ -29,3 +29,6 @@ Package.resolved
 # Spike build artifacts
 Spike/**/*.app/
 Spike/**/probe.log
+
+# Local diagnostics
+.capture-diagnostics.log
