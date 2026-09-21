@@ -12,6 +12,7 @@ import PeekCore
 final class PanelController {
 
     private let panel: PeekPanel
+    private let viewModel = PanelViewModel()
     private var outsideClickMonitor: Any?
 
     private static let defaultSize = CGSize(width: 440, height: 300)
@@ -66,7 +67,7 @@ final class PanelController {
         background.state = .active
         background.autoresizingMask = [.width, .height]
 
-        let host = NSHostingView(rootView: PanelRootView())
+        let host = NSHostingView(rootView: PanelRootView(model: viewModel))
         host.autoresizingMask = [.width, .height]
         host.frame = background.bounds
         background.addSubview(host)
@@ -85,6 +86,11 @@ final class PanelController {
     /// `NSEvent.mouseLocation` is already in the bottom-left-origin screen space
     /// that ``PanelPlacement`` expects, so no flipping is needed here.
     func show(anchor: CGRect? = nil) {
+        // Read the frontmost app *before* ordering the panel front. The panel
+        // is non-activating so this would almost certainly still be correct
+        // afterwards, but "almost certainly" is not worth depending on.
+        let frontApp = FrontmostApp.current()
+
         let target = anchor ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
         let screens = NSScreen.screens.map {
             PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
@@ -98,6 +104,10 @@ final class PanelController {
 
         panel.makeKeyAndOrderFront(nil)
         installOutsideClickMonitor()
+
+        // Panel first, context second. Capture is IPC into another process and
+        // must never sit between the trigger and the panel appearing.
+        viewModel.refreshContext(frontApp: frontApp)
     }
 
     func hide() {
