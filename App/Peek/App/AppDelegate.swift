@@ -15,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // LSUIElement so the policy holds from launch rather than flickering.
         NSApp.setActivationPolicy(.accessory)
 
+        // Required even though this app shows no menu bar: AppKit routes ⌘C,
+        // ⌘V, ⌘X, ⌘A and ⌘Z through the Edit menu's key equivalents, so
+        // without a main menu the panel's text field cannot use the clipboard.
+        NSApp.mainMenu = MainMenu.build()
+
         // Built once, at launch, and reused for every invocation. Panel
         // appearance latency is the number that matters for this product, and
         // constructing an NSPanel plus its SwiftUI hosting view on demand costs
@@ -27,14 +32,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.settingsWindow = settingsWindow
 
         let viewModel = PanelViewModel(settings: settings, engine: engine)
-        viewModel.onOpenSettings = { settingsWindow.show() }
-
         let panel = PanelController(viewModel: viewModel)
         self.panel = panel
 
+        // Settings is a conventional, activating window; leaving the
+        // non-activating panel floating above it looks broken and steals the
+        // keystrokes meant for the key field. Assigned after `panel` exists so
+        // the closure can capture it.
+        viewModel.onOpenSettings = { [weak panel] in
+            panel?.hide()
+            settingsWindow.show()
+        }
+
         let statusItem = StatusItemController(
             onPrimaryAction: { [weak panel] in panel?.toggle() },
-            onOpenSettings: { settingsWindow.show() },
+            onOpenSettings: { [weak panel] in
+                panel?.hide()
+                settingsWindow.show()
+            },
             onQuit: { NSApp.terminate(nil) }
         )
         self.statusItem = statusItem
@@ -59,5 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         true
+    }
+
+    /// Target for the ⌘, menu item, reached through the responder chain.
+    @objc func openSettingsFromMenu(_ sender: Any?) {
+        panel?.hide()
+        settingsWindow?.show()
     }
 }

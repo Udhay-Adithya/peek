@@ -54,6 +54,17 @@ struct PanelRootView: View {
             if model.isCapturing {
                 ProgressView().controlSize(.small).scaleEffect(0.6)
             }
+
+            Button {
+                model.openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .imageScale(.small)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Settings (\u{2318},)")
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
