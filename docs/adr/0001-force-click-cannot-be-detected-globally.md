@@ -177,3 +177,83 @@ Costs, recorded so the decision is not revisited from memory:
 Deferred rather than rejected: revisit only once the product is otherwise
 complete, and behind a feature flag that degrades to the hotkey if the private
 framework fails to load.
+
+---
+
+## Addendum 2 — Force Click implemented via a private framework (2026-09-21)
+
+**Status of the original decision:** unchanged for *public* APIs. Force Click
+remains undetectable through any public interface, now established twice.
+
+### What changed
+
+The user pointed to [TrackWeight](https://github.com/KrishKrosh/TrackWeight),
+which reads Force Touch pressure to use the trackpad as a scale, via Takuto
+Nakamura's [OpenMultitouchSupport](https://github.com/Kyome22/OpenMultitouchSupport)
+wrapper around the private `MultitouchSupport.framework`. That is the route
+this ADR had identified and deferred; a working precedent materially reduced
+the risk, and private API use was explicitly authorised.
+
+### Measurement
+
+A third spike (`Spike/PressureThresholdProbe/`) correlated a listen-only
+`CGEventTap` on `leftMouseDown` with raw pressure frames, logging the peak
+pressure in a window after each click. Five normal clicks then five Force
+Clicks:
+
+| | Peak pressure |
+|---|---|
+| Normal clicks | 141, 159, 169, 175, 176, 180, 193, 203, 208, 226 |
+| Force Clicks | 522, 561, 577, 577, 741, 1086 |
+
+Three findings drove the design:
+
+- **The two populations separate cleanly**, with an empty band from 226 to 522.
+  The default threshold is **350**, roughly central.
+- **Pressure at mouse-down does not discriminate** (96–424, fully overlapping).
+  The second detent lands *after* mouse-down, so a window must be measured
+  rather than the instant of the click.
+- **`total` (capacitance) does not discriminate** (0.996–1.426 for both). Only
+  `pressure` carries force.
+
+No permission was required to read the pressure feed — `AXIsProcessTrusted` was
+false throughout the spike. Accessibility is still needed for the click tap.
+
+### Implementation
+
+- `ForceClickDetector` (PeekCore) — pure state machine, 13 tests. Guards
+  against drags, double-clicks, press-and-hold, resting palms, and the ~90
+  frames/second of over-threshold samples a single press produces.
+- `MultitouchPressureMonitor` (app target) — six symbols resolved with
+  `dlsym`, **never link-time linked**, so a future macOS that changes or
+  removes the framework leaves Peek launching normally with the trigger
+  reporting itself unavailable. The `MTTouch` stride is verified as 96 bytes
+  before any field is read; a layout change disables the monitor rather than
+  producing garbage.
+- `ForceClickTrigger` (app target) — joins the tap and the pressure feed,
+  handles `kCGEventTapDisabledByTimeout`/`ByUserInput` re-enabling, and is
+  listen-only so no click is ever swallowed.
+
+Pressure frames are gated at the detection threshold inside the C callback, so
+resting contact costs one float comparison and never crosses to the main actor.
+
+### Dependency decision
+
+OpenMultitouchSupport is **not** taken as a package dependency. Its SPM
+manifest pulls a prebuilt `.xcframework` from a GitHub release plus
+`swift-async-algorithms`; an opaque third-party binary inside an app that holds
+the user's API keys and reads their selected text is not a justified trade, and
+Peek needs six of its symbols. The reused knowledge is its *public header* —
+the `MTTouch` layout and symbol names — which is credited in the source.
+
+### Consequences
+
+- **Mac App Store is now permanently impossible**, on top of the sandbox
+  blocker in ADR 0002. This was already the distribution decision.
+- **Off by default.** It depends on a private framework and competes with the
+  system's own Look Up, so enabling it is the user's choice.
+- **The system Look Up conflict returns.** With Force Click enabled, both Peek
+  and Dictionary appear unless the user turns off Trackpad › Point & Click ›
+  Look up & data detectors. Settings says so and deep-links there. Still no API
+  to do it programmatically.
+- The hotkey and Services triggers are unaffected by any failure here.
