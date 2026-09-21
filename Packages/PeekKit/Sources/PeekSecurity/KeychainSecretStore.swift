@@ -3,9 +3,16 @@ import Security
 
 /// Keychain-backed credential storage.
 ///
-/// Uses the data-protection keychain (`kSecUseDataProtectionKeychain`), which
-/// is the modern behaviour on macOS and avoids the legacy file-based keychain's
-/// ACL prompts.
+/// Deliberately does **not** set `kSecUseDataProtectionKeychain`. On macOS that
+/// flag requires the process to carry a `keychain-access-groups` entitlement or
+/// to be sandboxed; Peek is neither, and `SecItemAdd` then fails with
+/// `errSecMissingEntitlement` (-34018). Obtaining that entitlement for a
+/// non-sandboxed Developer ID app means dragging in a provisioning profile for
+/// no functional gain, so the file-based keychain is used instead.
+///
+/// The tradeoff: keychain item ACLs are tied to the code signature, so changing
+/// signing identity produces a one-time "allow access" prompt. That is a
+/// development-time annoyance, not a shipping one.
 ///
 /// Accessibility is `AfterFirstUnlock`: Peek can be a login item, so it may
 /// need its key before the user has interacted with the machine, but the key
@@ -23,7 +30,6 @@ public struct KeychainSecretStore: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.account,
-            kSecUseDataProtectionKeychain as String: true,
         ]
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// Identifies one stored secret.
 public struct SecretKey: Hashable, Sendable {
@@ -13,6 +14,23 @@ public struct SecretKey: Hashable, Sendable {
 public enum SecretStoreError: Error, Equatable, Sendable {
     case unexpectedStatus(OSStatus)
     case dataCorrupted
+}
+
+extension SecretStoreError: LocalizedError {
+    /// Includes the raw `OSStatus`.
+    ///
+    /// Keychain failures are otherwise indistinguishable from each other, and a
+    /// bare "could not save" gives neither the user nor a bug report anything
+    /// to act on. Status codes describe the API call, not the secret.
+    public var errorDescription: String? {
+        switch self {
+        case .unexpectedStatus(let status):
+            let detail = SecCopyErrorMessageString(status, nil) as String?
+            return "Keychain error \(status)\(detail.map { ": \($0)" } ?? "")"
+        case .dataCorrupted:
+            return "The stored credential could not be decoded."
+        }
+    }
 }
 
 /// Somewhere to keep credentials.

@@ -95,7 +95,7 @@ struct SettingsView: View {
             savedMessage = "Saved"
         } catch {
             savedMessage = nil
-            saveError = "Could not save to Keychain."
+            saveError = error.localizedDescription
         }
     }
 
@@ -105,7 +105,7 @@ struct SettingsView: View {
             savedMessage = "Removed"
             saveError = nil
         } catch {
-            saveError = "Could not update Keychain."
+            saveError = error.localizedDescription
         }
     }
 }
