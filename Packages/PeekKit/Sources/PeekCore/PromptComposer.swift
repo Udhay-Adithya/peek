@@ -29,11 +29,17 @@ public enum PromptComposer {
     /// is a prompt-injection boundary as much as a formatting choice: arbitrary
     /// text from another application must not read as an instruction, and the
     /// system instruction is written to reinforce it.
-    public static func userMessage(prompt: String, context: SelectionContext?) -> ChatMessage {
+    public static func userMessage(prompt: String,
+                                  context: SelectionContext?,
+                                  attachments: [ImageAttachment] = []) -> ChatMessage {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let imageParts = attachments.map { ContentPart.image($0) }
 
         guard let context else {
-            return ChatMessage(role: .user, text: trimmed)
+            // With an image but no typed question, the implicit prompt applies
+            // just as it does for a text selection.
+            let text = trimmed.isEmpty && !attachments.isEmpty ? implicitPrompt : trimmed
+            return ChatMessage(role: .user, parts: imageParts + [.text(text)])
         }
 
         let question = trimmed.isEmpty ? implicitPrompt : trimmed
@@ -51,12 +57,16 @@ public enum PromptComposer {
             \(question)
             """
 
-        return ChatMessage(role: .user, parts: [.text(body)])
+        // Images first: providers attend to a question asked after the
+        // material it refers to.
+        return ChatMessage(role: .user, parts: imageParts + [.text(body)])
     }
 
     /// Whether there is enough to send at all.
-    public static func canSend(prompt: String, context: SelectionContext?) -> Bool {
-        if context != nil { return true }
+    public static func canSend(prompt: String,
+                               context: SelectionContext?,
+                               attachments: [ImageAttachment] = []) -> Bool {
+        if context != nil || !attachments.isEmpty { return true }
         return !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
