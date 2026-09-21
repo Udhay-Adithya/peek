@@ -52,3 +52,18 @@ targets:
         CODE_SIGN_ENTITLEMENTS: App/Peek/Resources/Peek.entitlements
         COMBINE_HIDPI_IMAGES: YES
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  PeekTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/PeekTests
+    dependencies:
+      - target: Peek
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.udhayadithya.PeekTests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Peek.app/Contents/MacOS/Peek"
+        SWIFT_OBJC_BRIDGING_HEADER: ""
