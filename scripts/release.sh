@@ -137,4 +137,26 @@ xcrun stapler validate "$DMG"
 say "Verifying Gatekeeper acceptance"
 spctl --assess --type open --context context:primary-signature -v "$DMG" 2>&1 || true
 
+# --- Appcast -------------------------------------------------------------
+# Sparkle ships generate_appcast inside its SPM artifact bundle. It signs each
+# update with the EdDSA private key held in the login keychain, which is what
+# lets Peek reject anything it did not publish even if the download host is
+# compromised.
+say "Generating appcast"
+
+GENERATE_APPCAST=$(find ~/Library/Developer/Xcode/DerivedData \
+  -type f -name generate_appcast -path "*Sparkle*" 2>/dev/null | head -1)
+
+if [ -z "$GENERATE_APPCAST" ]; then
+  printf '\033[33mwarning: generate_appcast not found; build Peek once so SPM fetches Sparkle.\033[0m\n'
+elif ! security find-generic-password -s "https://sparkle-project.org" >/dev/null 2>&1; then
+  printf '\033[33mwarning: no Sparkle signing key in the keychain.\033[0m\n'
+  printf 'Run Sparkle'"'"'s generate_keys once, then put the printed public key in\n'
+  printf 'App/Peek/Resources/Info.plist under SUPublicEDKey.\n'
+else
+  "$GENERATE_APPCAST" "$BUILD_DIR" -o "$BUILD_DIR/appcast.xml"
+  echo "appcast: $BUILD_DIR/appcast.xml"
+  printf '\nUpload BOTH to the GitHub release: the DMG and appcast.xml\n'
+fi
+
 printf '\n\033[32mdone: %s\033[0m\n\n' "$DMG"

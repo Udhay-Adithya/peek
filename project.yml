@@ -27,6 +27,14 @@ settings:
 packages:
   PeekKit:
     path: Packages/PeekKit
+  # The only third-party runtime dependency. Justified: Peek ships outside the
+  # Mac App Store, so it needs its own updater, and a correct one means EdDSA
+  # signature verification, atomic replacement of a running app, and privileged
+  # installs. Sparkle is the audited standard for exactly this; hand-rolling it
+  # would be security-sensitive work with no upside.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 
 targets:
   Peek:
@@ -43,6 +51,8 @@ targets:
         product: PeekSecurity
       - package: PeekKit
         product: PeekPersistence
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_NAME: Peek

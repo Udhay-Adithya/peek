@@ -34,6 +34,12 @@ enum MainMenu {
         settings.target = nil
         menu.addItem(settings)
 
+        let updates = NSMenuItem(title: "Check for Updates…",
+                                 action: #selector(AppDelegate.checkForUpdatesFromMenu(_:)),
+                                 keyEquivalent: "")
+        updates.target = nil
+        menu.addItem(updates)
+
         menu.addItem(.separator())
 
         // ⌘Q hides rather than quits. Peek is a resident utility: quitting it

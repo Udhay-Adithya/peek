@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     let engine: AssistantEngine
     @Bindable var usage: UsageStatisticsViewModel
+    let updates: UpdateController
 
     @State private var keyInput: String = ""
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -149,6 +150,32 @@ struct SettingsView: View {
                     }
                 } else {
                     Text("This Mac has no Force Touch trackpad, so Force Click is unavailable. Use \u{2303}\u{2325}Space instead.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Updates") {
+                if updates.isConfigured {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updates.automaticallyChecksForUpdates },
+                        set: { updates.automaticallyChecksForUpdates = $0 }
+                    ))
+                    HStack {
+                        Button("Check Now") { updates.checkForUpdates() }
+                            .disabled(!updates.canCheckForUpdates)
+                        Spacer()
+                        if let last = updates.lastUpdateCheckDate {
+                            Text("Last checked \(last.formatted(.relative(presentation: .numeric)))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("Updates are downloaded from GitHub Releases and verified against a signing key built into Peek.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("This build has no update feed configured, so it will not check for updates.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

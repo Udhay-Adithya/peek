@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var router: MainWindowRouter?
     private var services: ServicesProvider?
     private var mainWindow: MainWindowController?
+    private var updates: UpdateController?
     private var forceClick: ForceClickTrigger?
     private var settingsObservation: NSObjectProtocol?
 
@@ -45,6 +46,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let session = AssistantSession(engine: engine, store: store)
         let history = HistoryViewModel(store: store)
         let usage = UsageStatisticsViewModel(store: store)
+        let updates = UpdateController()
+        self.updates = updates
 
         let mainWindow = MainWindowController {
             AnyView(MainWindowView(session: session,
@@ -52,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                    router: router,
                                    settings: settings,
                                    usage: usage,
+                                   updates: updates,
                                    engine: engine))
         }
         self.mainWindow = mainWindow
@@ -197,6 +201,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fatalError("SwiftData could not create even an in-memory container")
             }
         }
+    }
+
+    /// Target for the "Check for Updates…" menu item.
+    @objc func checkForUpdatesFromMenu(_ sender: Any?) {
+        updates?.checkForUpdates()
     }
 
     /// Target for the ⌘Q menu item.

@@ -50,6 +50,16 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Sparkle. Replace SUPublicEDKey with the public half printed by
+	     Sparkle's generate_keys tool, and SUFeedURL with the appcast hosted on
+	     GitHub Releases. Until both are set, Peek reports updates as
+	     unavailable rather than checking a feed that does not exist. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/Udhay-Adithya/peek/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>REPLACE_WITH_SPARKLE_PUBLIC_KEY</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Udhay Adithya J. All rights reserved.</string>
 </dict>
