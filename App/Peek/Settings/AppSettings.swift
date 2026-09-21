@@ -16,6 +16,7 @@ final class AppSettings {
         static let autoSend = "behaviour.autoSendOnInvoke"
         static let clipboardFallback = "capture.clipboardFallbackEnabled"
         static let continueRecent = "behaviour.continueRecentConversation"
+        static let forceClick = "triggers.forceClickEnabled"
     }
 
     /// How recently a conversation must have been touched to be resumed.
@@ -46,6 +47,9 @@ final class AppSettings {
         // context at all, which is most browsers and most chat apps.
         self.clipboardFallbackEnabled = defaults.object(forKey: Key.clipboardFallback) as? Bool ?? true
         self.continueRecentConversation = defaults.object(forKey: Key.continueRecent) as? Bool ?? true
+        // Off by default: it depends on a private framework and competes with
+        // the system's own Look Up, so it is the user's decision to switch on.
+        self.forceClickEnabled = defaults.object(forKey: Key.forceClick) as? Bool ?? false
     }
 
     var providerID: ProviderIdentifier {
@@ -66,6 +70,11 @@ final class AppSettings {
 
     var clipboardFallbackEnabled: Bool {
         didSet { defaults.set(clipboardFallbackEnabled, forKey: Key.clipboardFallback) }
+    }
+
+    /// Whether Force Click invokes Peek.
+    var forceClickEnabled: Bool {
+        didSet { defaults.set(forceClickEnabled, forKey: Key.forceClick) }
     }
 
     /// Whether invoking from the same app shortly after continues that thread.

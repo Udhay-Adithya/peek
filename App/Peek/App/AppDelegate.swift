@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var router: MainWindowRouter?
     private var services: ServicesProvider?
     private var mainWindow: MainWindowController?
+    private var forceClick: ForceClickTrigger?
+    private var settingsObservation: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu-bar resident: no Dock icon, no app switcher entry. Paired with
@@ -96,6 +98,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.statusItem = statusItem
 
+        // Force Click, when the user has switched it on.
+        let forceClick = ForceClickTrigger { [weak panel] point in
+            // The pressure feed gives the click location; anchor there rather
+            // than at wherever the pointer drifted to afterwards.
+            panel?.show(anchor: CGRect(origin: point, size: .zero))
+        }
+        self.forceClick = forceClick
+        Self.syncForceClick(forceClick, enabled: settings.forceClickEnabled)
+
+        // Re-evaluated when the setting changes, so toggling takes effect
+        // immediately rather than at next launch.
+        settingsObservation = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                Self.syncForceClick(forceClick, enabled: settings.forceClickEnabled)
+            }
+        }
+
         // "Ask Peek" in every app's Services menu — no permissions required.
         let services = ServicesProvider { [weak panel] text, appName in
             panel?.show(providedText: text, appName: appName)
@@ -133,6 +154,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Drops the Dock icon again once the last ordinary window closes.
     func applicationDidUpdate(_ notification: Notification) {
         mainWindow?.restoreAccessoryPolicyIfNeeded()
+    }
+
+    private static func syncForceClick(_ trigger: ForceClickTrigger, enabled: Bool) {
+        if enabled {
+            if !trigger.isRunning { trigger.start() }
+        } else if trigger.isRunning {
+            trigger.stop()
+        }
     }
 
     /// Conversation storage, falling back to an in-memory store.

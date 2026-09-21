@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import PeekProviders
 
@@ -107,6 +108,40 @@ struct SettingsView: View {
                     Text("Login items are disabled for Peek in System Settings › General › Login Items.")
                         .font(.caption)
                         .foregroundStyle(.orange)
+                }
+            }
+
+            Section("Force Click") {
+                if ForceClickTrigger.isSupported {
+                    Toggle("Invoke Peek with Force Click", isOn: $settings.forceClickEnabled)
+
+                    Text("Requires a Force Touch trackpad and Accessibility permission. "
+                         + "Reads trackpad pressure through a private macOS framework, so a future "
+                         + "macOS update could disable it — the keyboard shortcut always keeps working.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if settings.forceClickEnabled {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Turn off the system's own Look Up, or both will appear at once.")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            Button("Open Trackpad Settings") {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.Trackpad-Settings.extension") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            Text("Trackpad › Point & Click › Look up & data detectors › Off")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                } else {
+                    Text("This Mac has no Force Touch trackpad, so Force Click is unavailable. Use \u{2303}\u{2325}Space instead.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
