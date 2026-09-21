@@ -6,6 +6,7 @@ public struct ProviderIdentifier: Hashable, Sendable, RawRepresentable, Codable 
     public init(rawValue: String) { self.rawValue = rawValue }
 
     public static let gemini = ProviderIdentifier(rawValue: "gemini")
+    public static let appleIntelligence = ProviderIdentifier(rawValue: "apple-intelligence")
 }
 
 public struct ModelDescriptor: Sendable, Equatable, Identifiable {
@@ -32,10 +33,20 @@ public protocol AssistantProvider: Sendable {
     var displayName: String { get }
     var models: [ModelDescriptor] { get }
 
+    /// Whether this provider needs an API key at all.
+    ///
+    /// False for the on-device model, which lets the settings UI omit the
+    /// credential field rather than asking for a key that does not exist.
+    var requiresAPIKey: Bool { get }
+
     /// Streams a turn as normalised events.
     ///
     /// Errors arrive by the stream throwing, never as an event, so a consumer
     /// cannot forget to handle them. Cancelling the consuming task must abort
     /// the underlying request.
     func stream(_ request: AssistantRequest) -> AsyncThrowingStream<AssistantStreamEvent, Error>
+}
+
+public extension AssistantProvider {
+    var requiresAPIKey: Bool { true }
 }
