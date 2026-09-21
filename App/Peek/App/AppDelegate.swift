@@ -26,20 +26,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Required even though this app shows no menu bar: AppKit routes ⌘C,
         // ⌘V, ⌘X, ⌘A and ⌘Z through the Edit menu's key equivalents, so
         // without a main menu the panel's text field cannot use the clipboard.
-        NSApp.mainMenu = MainMenu.build()
+        PerformanceHarness.phase("main menu") { NSApp.mainMenu = MainMenu.build() }
 
         // Built once, at launch, and reused for every invocation. Panel
         // appearance latency is the number that matters for this product, and
         // constructing an NSPanel plus its SwiftUI hosting view on demand costs
         // far more than positioning and ordering an existing one.
-        let settings = AppSettings()
-        let engine = AssistantEngine(settings: settings)
+        let settings = PerformanceHarness.phase("AppSettings") { AppSettings() }
+        let engine = PerformanceHarness.phase("AssistantEngine") { AssistantEngine(settings: settings) }
         let router = MainWindowRouter()
         self.settings = settings
         self.engine = engine
         self.router = router
 
-        let store = Self.makeStore()
+        let store = PerformanceHarness.phase("SwiftData container") { Self.makeStore() }
         // Session and history live here, not in a view model: the panel and the
         // expanded window are two views onto one conversation.
         let session = AssistantSession(engine: engine, store: store)
@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                        store: store,
                                        session: session,
                                        history: history)
-        let panel = PanelController(viewModel: viewModel)
+        let panel = PerformanceHarness.phase("panel pre-warm") { PanelController(viewModel: viewModel) }
         self.panel = panel
 
         viewModel.onExpand = { [weak panel] in
@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let services = ServicesProvider { [weak panel] text, appName in
             panel?.show(providedText: text, appName: appName)
         }
-        services.register()
+        PerformanceHarness.phase("services register") { services.register() }
         self.services = services
 
         // Menu-bar activity indicator, driven by the streaming layer.
@@ -140,6 +140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.hotKeys = hotKeys
         statusItem.hotKeyStatus = registered ? .registered(.defaultInvoke)
                                              : .unavailable(.defaultInvoke)
+
+        PerformanceHarness.recordLaunchComplete()
+
+        if PerformanceHarness.isEnabled {
+            Task {
+                await PerformanceHarness.runPanelBenchmark(iterations: 60, panel: panel)
+                NSApp.terminate(nil)
+            }
+        }
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
