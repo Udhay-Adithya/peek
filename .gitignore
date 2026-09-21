@@ -1,0 +1,27 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+!*.xcodeproj/project.pbxproj
+xcuserdata/
+DerivedData/
+build/
+.build/
+*.xcuserstate
+*.xcscmblueprint
+
+# XcodeGen generates the project; project.yml is the source of truth
+Peek.xcodeproj/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Secrets — never commit
+*.p12
+*.cer
+*.provisionprofile
+.env
+.env.*
