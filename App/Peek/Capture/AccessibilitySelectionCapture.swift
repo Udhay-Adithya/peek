@@ -10,11 +10,17 @@ import PeekCore
 /// into the target application, and a busy or wedged app would otherwise block
 /// the panel from appearing.
 ///
-/// Not every app participates. Electron and Chromium expose nothing until
-/// `AXManualAccessibility` is set, and some Java, Catalyst and custom text
-/// views never expose a selection at all. That is reported as
-/// ``SelectionOutcome/unsupported(appName:)`` rather than treated as an error,
-/// because it is not something the user can fix.
+/// Coverage is genuinely uneven across the Mac app ecosystem, and the three
+/// families behave differently enough to be worth naming:
+///
+/// * **Native AppKit** (Notes, Safari, TextEdit, Ghostty) — works directly.
+/// * **Chromium/Electron** (Claude, Obsidian, VS Code, Slack) — exposes nothing
+///   until `AXManualAccessibility` is set, and then builds its tree
+///   *asynchronously*, so the first read after priming still fails. Handled by
+///   priming and retrying once.
+/// * **Gecko** (Firefox, Zen) — ignores `AXManualAccessibility`; reports the
+///   window as the focused element rather than the text view. Handled on the
+///   retry path via `AXEnhancedUserInterface`.
 struct AccessibilitySelectionCapture: Sendable {
 
     let policy: CapturePolicy
@@ -22,15 +28,32 @@ struct AccessibilitySelectionCapture: Sendable {
     /// Caps how long a single Accessibility round-trip may take.
     ///
     /// The system default is measured in seconds. An unresponsive app must not
-    /// be able to stall context capture, and a selection that takes longer than
-    /// this to read is not worth waiting for.
+    /// be able to stall context capture.
     private static let messagingTimeout: Float = 0.25
+
+    /// How long to let a Chromium app build its accessibility tree after the
+    /// tree is first requested. The panel is already on screen and showing a
+    /// pending state, so this is latency the user does not sit blocked on.
+    private static let treeBuildDelay = Duration.milliseconds(250)
+
+    /// Roles that represent editable or selectable text.
+    ///
+    /// Used to tell "this app does not support selections" from "this app
+    /// supports them and nothing is selected". Several apps — Ghostty among
+    /// them — drop `AXSelectedText` entirely rather than returning an empty
+    /// string when there is no selection.
+    private static let textRoles: Set<String> = [
+        "AXTextArea", "AXTextField", "AXStaticText",
+        "AXComboBox", "AXSearchField", "AXWebArea",
+    ]
 
     init(policy: CapturePolicy = CapturePolicy()) {
         self.policy = policy
     }
 
-    func capture(frontApp: FrontmostApp?, primaryScreenMaxY: CGFloat) -> SelectionOutcome {
+    // MARK: - Entry point
+
+    func capture(frontApp: FrontmostApp?, primaryScreenMaxY: CGFloat) async -> SelectionOutcome {
         guard AXIsProcessTrusted() else { return .permissionRequired }
 
         guard policy.allowsCapture(fromBundleID: frontApp?.bundleID) else {
@@ -39,14 +62,35 @@ struct AccessibilitySelectionCapture: Sendable {
         }
 
         if let pid = frontApp?.processID {
-            activateChromiumAccessibility(pid: pid)
+            prime(pid: pid, aggressive: false)
         }
+
+        let first = attempt(frontApp: frontApp, primaryScreenMaxY: primaryScreenMaxY)
+
+        // Only an outright lack of support is worth retrying. An empty
+        // selection or a withheld one is a final answer.
+        guard case .unsupported = first, let pid = frontApp?.processID else {
+            return first
+        }
+
+        prime(pid: pid, aggressive: true)
+        try? await Task.sleep(for: Self.treeBuildDelay)
+
+        let second = attempt(frontApp: frontApp, primaryScreenMaxY: primaryScreenMaxY, isRetry: true)
+        return second
+    }
+
+    // MARK: - Single attempt
+
+    private func attempt(frontApp: FrontmostApp?,
+                         primaryScreenMaxY: CGFloat,
+                         isRetry: Bool = false) -> SelectionOutcome {
+        let stage = isRetry ? "retry" : "first"
 
         // Scope the query to the invoking application, NOT the system-wide
         // element. The panel is already key by the time this runs, so the
-        // system-wide focused element is Peek own input field, which has no
-        // selection and makes every capture look empty. Asking the application
-        // element for its focused element is unaffected by who holds key focus.
+        // system-wide focused element is Peek's own input field, which has no
+        // selection and makes every capture look empty.
         let root: AXUIElement
         if let pid = frontApp?.processID {
             root = AXUIElementCreateApplication(pid)
@@ -56,37 +100,40 @@ struct AccessibilitySelectionCapture: Sendable {
         AXUIElementSetMessagingTimeout(root, Self.messagingTimeout)
 
         guard let focused = copyElement(root, kAXFocusedUIElementAttribute) else {
-            Self.log(outcome: "unsupported-no-focused-element", app: frontApp)
-            Self.logAttributeNames(of: root, app: frontApp, label: "app-element")
+            Self.log(outcome: "unsupported-no-focused-element-\(stage)", app: frontApp)
             return .unsupported(appName: frontApp?.name)
         }
         AXUIElementSetMessagingTimeout(focused, Self.messagingTimeout)
+
+        let role = copyString(focused, kAXRoleAttribute)
 
         // Never read a password field, even in an app that is not deny-listed.
         // A secure field reports role AXTextField with subrole
         // AXSecureTextField, so both are checked — some views set only one.
         if isSecureField(focused) {
-            Self.log(outcome: "withheld-secure-field", app: frontApp)
+            Self.log(outcome: "withheld-secure-field", app: frontApp, role: role)
             return .withheld(appName: frontApp?.name)
         }
 
         guard let raw = copyString(focused, kAXSelectedTextAttribute) else {
-            // The attribute is absent entirely: this app does not expose
-            // selections. Distinct from an empty selection.
-            Self.log(outcome: "unsupported-no-attribute", app: frontApp,
-                     role: copyString(focused, kAXRoleAttribute))
+            // The attribute is absent. If the focused element is nonetheless a
+            // text role, the app does support selections and simply has none —
+            // reporting that as "unsupported" misleads the user.
+            if let role, Self.textRoles.contains(role) {
+                Self.log(outcome: "empty-no-attribute-\(stage)", app: frontApp, role: role)
+                return .empty(appName: frontApp?.name)
+            }
+            Self.log(outcome: "unsupported-no-attribute-\(stage)", app: frontApp, role: role)
             Self.logAttributeNames(of: focused, app: frontApp)
             return .unsupported(appName: frontApp?.name)
         }
 
         guard let sanitized = policy.sanitize(raw) else {
-            Self.log(outcome: "empty-selection", app: frontApp,
-                     role: copyString(focused, kAXRoleAttribute))
+            Self.log(outcome: "empty-selection-\(stage)", app: frontApp, role: role)
             return .empty(appName: frontApp?.name)
         }
 
-        Self.log(outcome: "captured", app: frontApp,
-                 role: copyString(focused, kAXRoleAttribute),
+        Self.log(outcome: "captured-\(stage)", app: frontApp, role: role,
                  characters: sanitized.text.count)
 
         return .captured(SelectionContext(
@@ -98,22 +145,24 @@ struct AccessibilitySelectionCapture: Sendable {
         ))
     }
 
-    /// Asks a Chromium-based app to switch its accessibility tree on.
+    // MARK: - Priming non-native toolkits
+
+    /// Asks a non-native app to switch its accessibility tree on.
     ///
-    /// Chromium (and therefore every Electron app — VS Code, Slack, Discord,
-    /// Claude) keeps its accessibility tree switched off until an assistive
-    /// client sets `AXManualAccessibility` on the application element. Without
-    /// this, those apps expose no selection at all and are indistinguishable
-    /// from apps that genuinely do not support it.
+    /// `AXManualAccessibility` is Chromium's opt-in and is set on every
+    /// attempt: it is specific, cheap, and harmlessly unknown elsewhere.
     ///
-    /// Best-effort and deliberately unchecked: on a non-Chromium app the
-    /// attribute is simply unknown and the call fails harmlessly. Gecko-based
-    /// apps such as Firefox and Zen use their own activation path and are not
-    /// covered by this.
-    private func activateChromiumAccessibility(pid: pid_t) {
+    /// `AXEnhancedUserInterface` is only set on the retry, deliberately. It is
+    /// the flag VoiceOver sets, Gecko keys off it, and some apps change layout
+    /// behaviour when they believe a screen reader is attached. Limiting it to
+    /// apps that have already failed keeps that blast radius small.
+    private func prime(pid: pid_t, aggressive: Bool) {
         let appElement = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appElement, Self.messagingTimeout)
         AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        if aggressive {
+            AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        }
     }
 
     // MARK: - Selection bounds
@@ -175,10 +224,7 @@ struct AccessibilitySelectionCapture: Sendable {
                                           label: String = "focused") {
         var names: CFArray?
         guard AXUIElementCopyAttributeNames(element, &names) == .success,
-              let list = names as? [String] else {
-            logger.debug("attrs \(label, privacy: .public) bundle=\(app?.bundleID ?? "unknown", privacy: .public) <unavailable>")
-            return
-        }
+              let list = names as? [String] else { return }
         let joined = list.joined(separator: ",")
         logger.debug("attrs \(label, privacy: .public) bundle=\(app?.bundleID ?? "unknown", privacy: .public) \(joined, privacy: .public)")
     }

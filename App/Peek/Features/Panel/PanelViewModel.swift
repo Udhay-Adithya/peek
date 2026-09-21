@@ -38,8 +38,12 @@ final class PanelViewModel {
         let primaryMaxY = NSScreen.screens.first?.frame.maxY ?? 0
 
         captureTask = Task { [weak self] in
+            // Task.detached, not a bare `await`: capture must not inherit the
+            // main actor. Swift 6.2 is in the middle of changing whether a
+            // nonisolated async function runs on the caller's actor, and an
+            // Accessibility round-trip on the main actor would stall the panel.
             let outcome = await Task.detached(priority: .userInitiated) {
-                capture.capture(frontApp: frontApp, primaryScreenMaxY: primaryMaxY)
+                await capture.capture(frontApp: frontApp, primaryScreenMaxY: primaryMaxY)
             }.value
 
             guard !Task.isCancelled else { return }
