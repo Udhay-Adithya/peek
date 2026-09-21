@@ -56,17 +56,33 @@ final class StoredMessage {
     var createdAt: Date = Date.now
     var conversation: StoredConversation?
 
+    /// The selection this turn was asked about.
+    var contextText: String?
+    var contextSourceApp: String?
+
+    /// Token accounting, retained for the usage statistics in settings.
+    var inputTokens: Int?
+    var outputTokens: Int?
+
     @Relationship(deleteRule: .cascade, inverse: \StoredAttachment.message)
     var attachments: [StoredAttachment]? = []
 
     init(identifier: UUID = UUID(),
          role: ChatMessage.Role,
          text: String,
-         createdAt: Date = .now) {
+         createdAt: Date = .now,
+         contextText: String? = nil,
+         contextSourceApp: String? = nil,
+         inputTokens: Int? = nil,
+         outputTokens: Int? = nil) {
         self.identifier = identifier
         self.roleRaw = role.rawValue
         self.text = text
         self.createdAt = createdAt
+        self.contextText = contextText
+        self.contextSourceApp = contextSourceApp
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
     }
 
     var role: ChatMessage.Role {

@@ -16,6 +16,9 @@ final class AssistantSession {
         var text: String
         /// Number of images sent with this turn, for the transcript badge.
         var attachmentCount: Int = 0
+        /// The selection this turn was asked about, shown above the question.
+        var contextText: String?
+        var contextSourceApp: String?
         var isStreaming: Bool = false
         var failure: String?
         var isRetryable: Bool = false
@@ -76,7 +79,9 @@ final class AssistantSession {
         messages.append(DisplayMessage(
             role: .user,
             text: visible.isEmpty ? PromptComposer.implicitPrompt : visible,
-            attachmentCount: attachments.count
+            attachmentCount: attachments.count,
+            contextText: context?.text,
+            contextSourceApp: context?.sourceAppName
         ))
 
         let request = AssistantRequest(
@@ -88,7 +93,9 @@ final class AssistantSession {
 
         persist(PersistedMessage(role: .user,
                                  text: messages.last?.text ?? visible,
-                                 attachments: attachments),
+                                 attachments: attachments,
+                                 contextText: context?.text,
+                                 contextSourceApp: context?.sourceAppName),
                 title: PromptComposer.title(fromPrompt: prompt, context: context),
                 sourceAppName: context?.sourceAppName)
 
@@ -103,10 +110,16 @@ final class AssistantSession {
             // Attachment *counts* are restored, not the images themselves: a
             // long conversation would otherwise pull every screenshot it ever
             // contained back into memory just to show a transcript.
-            messages = stored.map {
-                DisplayMessage(role: $0.role,
-                               text: $0.text,
-                               attachmentCount: $0.attachments.count)
+            messages = stored.map { message in
+                var display = DisplayMessage(role: message.role,
+                                             text: message.text,
+                                             attachmentCount: message.attachments.count,
+                                             contextText: message.contextText,
+                                             contextSourceApp: message.contextSourceApp)
+                if let input = message.inputTokens, let output = message.outputTokens {
+                    display.usage = TokenUsage(inputTokens: input, outputTokens: output)
+                }
+                return display
             }
             conversationID = id
             lastRequest = nil
@@ -257,7 +270,10 @@ final class AssistantSession {
         }
 
         if !accumulator.text.isEmpty {
-            persist(PersistedMessage(role: .assistant, text: accumulator.text),
+            persist(PersistedMessage(role: .assistant,
+                                     text: accumulator.text,
+                                     inputTokens: accumulator.usage?.inputTokens,
+                                     outputTokens: accumulator.usage?.outputTokens),
                     title: "Conversation", sourceAppName: nil)
         }
         finishStreaming()

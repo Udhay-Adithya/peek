@@ -10,6 +10,35 @@ struct MessageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if message.role == .user {
+                if let context = message.contextText, !context.isEmpty {
+                    // The subject of the question, shown as a quote so it reads
+                    // as context rather than as something the user typed.
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.quote").imageScale(.small)
+                            Text(message.contextSourceApp ?? "Selection")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.tertiary)
+
+                        Text(context)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(5)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(.tertiary)
+                            .frame(width: 2)
+                            .clipShape(RoundedRectangle(cornerRadius: 1))
+                    }
+                }
+
                 if message.attachmentCount > 0 {
                     HStack(spacing: 3) {
                         Image(systemName: "photo").imageScale(.small)

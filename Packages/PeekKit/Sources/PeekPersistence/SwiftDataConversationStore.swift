@@ -31,7 +31,11 @@ public actor SwiftDataConversationStore: ConversationStore {
         let stored = StoredMessage(identifier: message.id,
                                    role: message.role,
                                    text: message.text,
-                                   createdAt: message.createdAt)
+                                   createdAt: message.createdAt,
+                                   contextText: message.contextText,
+                                   contextSourceApp: message.contextSourceApp,
+                                   inputTokens: message.inputTokens,
+                                   outputTokens: message.outputTokens)
         stored.conversation = conversation
         modelContext.insert(stored)
 
@@ -81,7 +85,11 @@ public actor SwiftDataConversationStore: ConversationStore {
                     createdAt: stored.createdAt,
                     attachments: (stored.attachments ?? []).map {
                         ImageAttachment(mimeType: $0.mimeType, data: $0.data)
-                    }
+                    },
+                    contextText: stored.contextText,
+                    contextSourceApp: stored.contextSourceApp,
+                    inputTokens: stored.inputTokens,
+                    outputTokens: stored.outputTokens
                 )
             }
     }
@@ -124,6 +132,73 @@ public actor SwiftDataConversationStore: ConversationStore {
         guard let latest = try recentConversations(limit: 1).first else { return nil }
         guard Date.now.timeIntervalSince(latest.updatedAt) <= interval else { return nil }
         return latest
+    }
+
+    // MARK: - Usage
+
+    public func usageStatistics(lastDays days: Int, calendar: Calendar) throws -> UsageStatistics {
+        let today = calendar.startOfDay(for: .now)
+        guard let start = calendar.date(byAdding: .day, value: -(days - 1), to: today) else {
+            return .empty
+        }
+
+        // Only assistant turns carry token counts.
+        let messages = try modelContext.fetch(
+            FetchDescriptor<StoredMessage>(
+                predicate: #Predicate { $0.createdAt >= start && $0.outputTokens != nil }
+            )
+        )
+
+        var perDay: [Date: (input: Int, output: Int)] = [:]
+        var perModel: [String: (provider: String, input: Int, output: Int, turns: Int)] = [:]
+        var conversations = Set<UUID>()
+        var totalInput = 0
+        var totalOutput = 0
+
+        for message in messages {
+            let input = message.inputTokens ?? 0
+            let output = message.outputTokens ?? 0
+            totalInput += input
+            totalOutput += output
+
+            let day = calendar.startOfDay(for: message.createdAt)
+            perDay[day, default: (0, 0)].input += input
+            perDay[day, default: (0, 0)].output += output
+
+            if let conversation = message.conversation {
+                conversations.insert(conversation.identifier)
+                let key = conversation.modelID
+                var entry = perModel[key] ?? (conversation.providerID, 0, 0, 0)
+                entry.input += input
+                entry.output += output
+                entry.turns += 1
+                perModel[key] = entry
+            }
+        }
+
+        // Fill empty days so the timeline has no invisible gaps.
+        var timeline: [UsageStatistics.Day] = []
+        for offset in 0..<days {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
+            let bucket = perDay[date] ?? (0, 0)
+            timeline.append(.init(date: date, inputTokens: bucket.input, outputTokens: bucket.output))
+        }
+
+        let models = perModel
+            .map { UsageStatistics.ModelBreakdown(modelID: $0.key, providerID: $0.value.provider,
+                                                  inputTokens: $0.value.input,
+                                                  outputTokens: $0.value.output,
+                                                  turns: $0.value.turns) }
+            .sorted { $0.totalTokens > $1.totalTokens }
+
+        return UsageStatistics(
+            totalInputTokens: totalInput,
+            totalOutputTokens: totalOutput,
+            assistantTurns: messages.count,
+            conversationCount: conversations.count,
+            days: timeline,
+            models: models
+        )
     }
 
     // MARK: - Helpers

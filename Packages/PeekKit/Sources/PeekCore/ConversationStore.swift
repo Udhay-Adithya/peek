@@ -14,17 +14,35 @@ public struct PersistedMessage: Sendable, Identifiable, Equatable {
     /// what was actually asked about, rather than a question with its subject
     /// silently missing.
     public var attachments: [ImageAttachment]
+    /// The selection this turn was asked about, when there was one.
+    ///
+    /// Kept separate from `text` rather than folded into it: the transcript
+    /// needs to show the question and its subject as distinct things, and the
+    /// composed payload sent to the model is a third thing again.
+    public var contextText: String?
+    public var contextSourceApp: String?
+    /// Token accounting for an assistant turn, where the provider reported it.
+    public var inputTokens: Int?
+    public var outputTokens: Int?
 
     public init(id: UUID = UUID(),
                 role: ChatMessage.Role,
                 text: String,
                 createdAt: Date = .now,
-                attachments: [ImageAttachment] = []) {
+                attachments: [ImageAttachment] = [],
+                contextText: String? = nil,
+                contextSourceApp: String? = nil,
+                inputTokens: Int? = nil,
+                outputTokens: Int? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
         self.attachments = attachments
+        self.contextText = contextText
+        self.contextSourceApp = contextSourceApp
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
     }
 }
 
@@ -83,6 +101,13 @@ public protocol ConversationStore: Sendable {
     /// `interval`. Backs "continue where I left off" without letting an
     /// unrelated conversation from yesterday absorb a new question.
     func mostRecentConversation(updatedWithin interval: TimeInterval) async throws -> ConversationSummary?
+
+    /// Token usage aggregated over the last `days` days.
+    ///
+    /// Computed from stored turns rather than a running counter, so it stays
+    /// correct when conversations are deleted and needs no separate bookkeeping
+    /// to keep in sync.
+    func usageStatistics(lastDays days: Int, calendar: Calendar) async throws -> UsageStatistics
 }
 
 public enum ConversationStoreError: Error, Equatable, Sendable {
