@@ -1,0 +1,186 @@
+import Testing
+import Foundation
+import PeekCore
+@testable import PeekPersistence
+
+/// Exercises the real SwiftData store against an in-memory container.
+///
+/// Deliberately not a hand-written fake: SwiftData's own behaviour — cascade
+/// deletes, predicate semantics, relationship ordering — is exactly what would
+/// break, and a fake would happily agree with whatever I assumed.
+@Suite("SwiftDataConversationStore")
+struct ConversationStoreTests {
+
+    private func makeStore() throws -> SwiftDataConversationStore {
+        SwiftDataConversationStore(modelContainer: try PeekModelContainer.makeInMemory())
+    }
+
+    private func newConversation(_ store: SwiftDataConversationStore,
+                                 title: String = "Force Touch") async throws -> ConversationID {
+        try await store.createConversation(title: title,
+                                           providerID: "gemini",
+                                           modelID: "gemini-3.5-flash",
+                                           sourceAppName: "Notes")
+    }
+
+    @Test("creates a conversation and lists it")
+    func createsAndLists() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+
+        let recent = try await store.recentConversations(limit: 10)
+        #expect(recent.count == 1)
+        #expect(recent.first?.id == id)
+        #expect(recent.first?.title == "Force Touch")
+        #expect(recent.first?.sourceAppName == "Notes")
+        #expect(recent.first?.messageCount == 0)
+    }
+
+    @Test("appends messages and returns them in chronological order")
+    func appendsMessagesInOrder() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        let base = Date(timeIntervalSince1970: 1_000_000)
+
+        // Inserted out of order on purpose: ordering must come from the data.
+        try await store.appendMessage(.init(role: .assistant, text: "second",
+                                            createdAt: base.addingTimeInterval(10)), to: id)
+        try await store.appendMessage(.init(role: .user, text: "first", createdAt: base), to: id)
+
+        let messages = try await store.messages(in: id)
+        #expect(messages.map(\.text) == ["first", "second"])
+        #expect(messages.map(\.role) == [.user, .assistant])
+    }
+
+    @Test("appending bumps the conversation's updatedAt")
+    func appendingTouchesConversation() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        let future = Date.now.addingTimeInterval(60)
+
+        try await store.appendMessage(.init(role: .user, text: "hi", createdAt: future), to: id)
+        let summary = try await store.recentConversations(limit: 1).first
+        #expect(summary?.updatedAt == future)
+        #expect(summary?.messageCount == 1)
+    }
+
+    @Test("orders conversations by most recently updated")
+    func ordersByRecency() async throws {
+        let store = try makeStore()
+        let older = try await newConversation(store, title: "older")
+        let newer = try await newConversation(store, title: "newer")
+
+        try await store.appendMessage(.init(role: .user, text: "x",
+                                            createdAt: .now.addingTimeInterval(-500)), to: older)
+        try await store.appendMessage(.init(role: .user, text: "y", createdAt: .now), to: newer)
+
+        let recent = try await store.recentConversations(limit: 10)
+        #expect(recent.map(\.title) == ["newer", "older"])
+    }
+
+    @Test("renames a conversation")
+    func renames() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        try await store.updateTitle("Renamed", for: id)
+        #expect(try await store.recentConversations(limit: 1).first?.title == "Renamed")
+    }
+
+    @Test("deleting a conversation cascades to its messages")
+    func deleteCascades() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        try await store.appendMessage(.init(role: .user, text: "orphan me"), to: id)
+
+        try await store.deleteConversation(id)
+        #expect(try await store.recentConversations(limit: 10).isEmpty)
+        // Messages must not survive their conversation.
+        #expect(try await store.search("orphan me", limit: 10).isEmpty)
+    }
+
+    @Test("operations on a missing conversation throw rather than fail silently")
+    func missingConversationThrows() async throws {
+        let store = try makeStore()
+        let ghost = ConversationID()
+        await #expect(throws: ConversationStoreError.conversationNotFound(ghost)) {
+            try await store.appendMessage(.init(role: .user, text: "x"), to: ghost)
+        }
+        await #expect(throws: ConversationStoreError.conversationNotFound(ghost)) {
+            try await store.updateTitle("x", for: ghost)
+        }
+    }
+
+    // MARK: - Search
+
+    @Test("finds conversations by title, case-insensitively")
+    func searchesTitles() async throws {
+        let store = try makeStore()
+        _ = try await newConversation(store, title: "Breadth-First Search")
+        _ = try await newConversation(store, title: "Unrelated")
+
+        let results = try await store.search("breadth", limit: 10)
+        #expect(results.map(\.title) == ["Breadth-First Search"])
+    }
+
+    @Test("finds conversations by message body")
+    func searchesMessageBodies() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store, title: "Opaque title")
+        try await store.appendMessage(.init(role: .assistant, text: "a trackpad digitiser"), to: id)
+
+        let results = try await store.search("digitiser", limit: 10)
+        #expect(results.map(\.id) == [id])
+    }
+
+    @Test("does not return the same conversation twice when title and body both match")
+    func searchDeduplicates() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store, title: "trackpad")
+        try await store.appendMessage(.init(role: .user, text: "trackpad"), to: id)
+
+        #expect(try await store.search("trackpad", limit: 10).count == 1)
+    }
+
+    @Test("an empty query returns recent conversations rather than nothing")
+    func emptyQueryReturnsRecent() async throws {
+        let store = try makeStore()
+        _ = try await newConversation(store, title: "a")
+        _ = try await newConversation(store, title: "b")
+        #expect(try await store.search("   ", limit: 10).count == 2)
+    }
+
+    @Test("respects the result limit")
+    func respectsLimit() async throws {
+        let store = try makeStore()
+        for index in 0..<5 { _ = try await newConversation(store, title: "conv \(index)") }
+        #expect(try await store.recentConversations(limit: 3).count == 3)
+    }
+
+    // MARK: - Continuation window
+
+    @Test("offers a recent conversation for continuation")
+    func offersRecentForContinuation() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        try await store.appendMessage(.init(role: .user, text: "x", createdAt: .now), to: id)
+
+        let candidate = try await store.mostRecentConversation(updatedWithin: 600)
+        #expect(candidate?.id == id)
+    }
+
+    @Test("will not resurrect a stale conversation")
+    func ignoresStaleConversation() async throws {
+        let store = try makeStore()
+        let id = try await newConversation(store)
+        // Touched an hour ago; a new question should not land in it.
+        try await store.appendMessage(.init(role: .user, text: "x",
+                                            createdAt: .now.addingTimeInterval(-3600)), to: id)
+
+        #expect(try await store.mostRecentConversation(updatedWithin: 600) == nil)
+    }
+
+    @Test("returns nil when there are no conversations at all")
+    func noConversations() async throws {
+        #expect(try await makeStore().mostRecentConversation(updatedWithin: 600) == nil)
+    }
+}
