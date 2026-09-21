@@ -7,6 +7,8 @@ struct SettingsView: View {
     let engine: AssistantEngine
 
     @State private var keyInput: String = ""
+    @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginItemBlocked = LoginItem.isBlockedByUser
     @State private var savedMessage: String?
     @State private var saveError: String?
 
@@ -65,6 +67,23 @@ struct SettingsView: View {
 
                 if settings.providerID == .gemini {
                     Text("Note: on Google's free Gemini tier, your prompts may be used to improve their products. Selected text and screenshots you send are subject to that.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Section("General") {
+                Toggle("Launch Peek at login", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { newValue in
+                        if LoginItem.setEnabled(newValue) {
+                            launchAtLogin = newValue
+                        }
+                        loginItemBlocked = LoginItem.isBlockedByUser
+                    }
+                ))
+                if loginItemBlocked {
+                    Text("Login items are disabled for Peek in System Settings › General › Login Items.")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
