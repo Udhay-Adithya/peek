@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import PeekCore
 
 /// Google Gemini, via `streamGenerateContent?alt=sse`.
@@ -66,14 +67,22 @@ public struct GeminiProvider: AssistantProvider {
         var finish: FinishReason?
 
         func handle(_ event: ServerSentEvent) throws {
+            let payload = event.data.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // An empty `data:` line is legal SSE and Gemini emits them, but
+            // JSONDecoder throws on empty input — so skipping these is a
+            // correctness requirement, not just defensiveness.
+            guard !payload.isEmpty else { return }
+
             // Some providers terminate with a sentinel; Gemini does not, but
             // tolerating it costs nothing and keeps the parser reusable.
-            guard event.data != "[DONE]" else { return }
+            guard payload != "[DONE]" else { return }
 
             let chunk: GeminiChunk
             do {
-                chunk = try JSONDecoder().decode(GeminiChunk.self, from: Data(event.data.utf8))
+                chunk = try JSONDecoder().decode(GeminiChunk.self, from: Data(payload.utf8))
             } catch {
+                Self.logUndecodable(payload, error: error)
                 throw AssistantError.invalidResponse("undecodable stream chunk")
             }
 
@@ -122,6 +131,28 @@ public struct GeminiProvider: AssistantProvider {
         // A stream that ends without an explicit reason still terminated
         // normally; the accumulator requires exactly one terminal event.
         continuation.yield(.finished(finish ?? .stop))
+    }
+
+    /// Structural diagnostics for a chunk that would not decode.
+    ///
+    /// Logs shape only — byte length, whether it is even JSON, and the
+    /// top-level keys. A stream chunk contains the model's reply, which is
+    /// user data, so its values are never recorded. The raw prefix is logged
+    /// only when the payload is not valid JSON at all, where it is a protocol
+    /// or error string rather than conversation content.
+    private static func logUndecodable(_ payload: String, error: Error) {
+        let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "provider")
+        let data = Data(payload.utf8)
+        let parsed = try? JSONSerialization.jsonObject(with: data)
+
+        if let object = parsed as? [String: Any] {
+            let keys = object.keys.sorted().joined(separator: ",")
+            logger.error("undecodable chunk bytes=\(data.count, privacy: .public) json=object keys=\(keys, privacy: .public) error=\(String(describing: error), privacy: .public)")
+        } else if parsed != nil {
+            logger.error("undecodable chunk bytes=\(data.count, privacy: .public) json=non-object-toplevel")
+        } else {
+            logger.error("undecodable chunk bytes=\(data.count, privacy: .public) json=invalid prefix=\(payload.prefix(80), privacy: .public)")
+        }
     }
 
     private func resolveKey() async throws -> String {

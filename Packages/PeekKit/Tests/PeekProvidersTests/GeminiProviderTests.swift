@@ -263,3 +263,76 @@ struct GeminiProviderTests {
         #expect(inline["data"] as? String == Data([0xFF, 0xD8]).base64EncodedString())
     }
 }
+
+@Suite("GeminiProvider stream robustness")
+struct GeminiProviderRobustnessTests {
+
+    private let key: APIKeyProvider = { "test-key" }
+
+    private func collect(_ lines: [String]) async throws -> [AssistantStreamEvent] {
+        let provider = GeminiProvider(apiKey: key, client: FixtureClient(lines: lines))
+        var events: [AssistantStreamEvent] = []
+        for try await event in provider.stream(AssistantRequest(
+            model: "gemini-2.5-flash",
+            messages: [ChatMessage(role: .user, text: "hi")]
+        )) {
+            events.append(event)
+        }
+        return events
+    }
+
+    @Test("ignores empty data lines instead of failing the stream")
+    func toleratesEmptyDataLines() async throws {
+        // Legal SSE, and Gemini emits them. JSONDecoder throws on empty input,
+        // so failing to skip these aborts an otherwise healthy response.
+        let events = try await collect([
+            "data:", "",
+            #"data: {"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}"#, "",
+            "data: ", "",
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ])
+        var acc = StreamAccumulator()
+        for event in events { try acc.apply(event) }
+        #expect(acc.text == "hello")
+        #expect(acc.finishReason == .stop)
+    }
+
+    @Test("ignores whitespace-only data lines")
+    func toleratesWhitespaceData() async throws {
+        let events = try await collect([
+            "data:    ", "",
+            #"data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"#, "",
+        ])
+        var acc = StreamAccumulator()
+        for event in events { try acc.apply(event) }
+        #expect(acc.text == "x")
+    }
+
+    @Test("tolerates a keep-alive comment mid-stream")
+    func toleratesKeepAlive() async throws {
+        let events = try await collect([
+            ": ping", "",
+            #"data: {"candidates":[{"content":{"parts":[{"text":"y"}]},"finishReason":"STOP"}]}"#, "",
+        ])
+        var acc = StreamAccumulator()
+        for event in events { try acc.apply(event) }
+        #expect(acc.text == "y")
+    }
+
+    @Test("tolerates a trailing [DONE] sentinel")
+    func toleratesDoneSentinel() async throws {
+        let events = try await collect([
+            #"data: {"candidates":[{"content":{"parts":[{"text":"z"}]},"finishReason":"STOP"}]}"#, "",
+            "data: [DONE]", "",
+        ])
+        var acc = StreamAccumulator()
+        for event in events { try acc.apply(event) }
+        #expect(acc.text == "z")
+    }
+
+    @Test("an empty stream still terminates cleanly")
+    func emptyStreamTerminates() async throws {
+        let events = try await collect([])
+        #expect(events == [.finished(.stop)])
+    }
+}
