@@ -17,14 +17,6 @@ struct PanelRootView: View {
             composer
         }
         .onAppear { promptFocused = true }
-        .sheet(isPresented: $model.isShowingHistory) {
-            HistoryView(
-                model: model.history,
-                onOpen: { model.openConversation($0) },
-                onClose: { model.isShowingHistory = false }
-            )
-            .frame(width: 420, height: 340)
-        }
     }
 
     // MARK: - Header

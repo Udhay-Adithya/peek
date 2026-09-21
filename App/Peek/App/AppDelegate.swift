@@ -44,12 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // expanded window are two views onto one conversation.
         let session = AssistantSession(engine: engine, store: store)
         let history = HistoryViewModel(store: store)
+        let usage = UsageStatisticsViewModel(store: store)
 
         let mainWindow = MainWindowController {
             AnyView(MainWindowView(session: session,
                                    history: history,
                                    router: router,
                                    settings: settings,
+                                   usage: usage,
                                    engine: engine))
         }
         self.mainWindow = mainWindow
@@ -75,6 +77,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewModel.onOpenSettings = { [weak panel] in
             panel?.hide()
             router.pane = .settings
+            mainWindow.show()
+        }
+
+        viewModel.onShowHistoryInWindow = { [weak panel] in
+            panel?.hide()
+            router.pane = .conversations
             mainWindow.show()
         }
 
@@ -189,6 +197,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fatalError("SwiftData could not create even an in-memory container")
             }
         }
+    }
+
+    /// Target for the ⌘Q menu item.
+    ///
+    /// Dismisses every surface and returns Peek to the menu bar, leaving the
+    /// hotkey, the Services entry and any Force Click trigger live.
+    @objc func hideToMenuBar(_ sender: Any?) {
+        panel?.hide()
+        for window in NSApp.windows where window.isVisible && !(window is PeekPanel) {
+            window.orderOut(nil)
+        }
+        NSApp.setActivationPolicy(.accessory)
     }
 
     /// Target for the ⌘, menu item, reached through the responder chain.

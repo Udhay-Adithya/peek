@@ -48,6 +48,8 @@ final class PanelViewModel {
 
     /// Invoked when the user asks for settings from inside the panel.
     var onOpenSettings: (() -> Void)?
+    /// Invoked when the user asks to browse conversation history.
+    var onShowHistoryInWindow: (() -> Void)?
     /// Used to get the panel out of the way of a region capture.
     var onRequestHidePanel: (() -> Void)?
     var onRequestShowPanel: (() -> Void)?
@@ -109,9 +111,27 @@ final class PanelViewModel {
         }
     }
 
+    /// Opens conversation search in the full window rather than a sheet.
+    ///
+    /// Browsing history is a task with room to breathe; a 440pt panel is the
+    /// wrong surface for it.
     func showHistory() {
-        isShowingHistory = true
         history.refresh()
+        onShowHistoryInWindow?()
+    }
+
+    /// Begins a fresh conversation for a new invocation.
+    ///
+    /// Every invocation starts clean unless continuation is explicitly enabled:
+    /// re-opening the panel onto the tail of an unrelated earlier conversation
+    /// is disorienting, and it silently feeds that history to the model.
+    func prepareForInvocation() {
+        guard !session.isStreaming else { return }
+        session.reset()
+        prompt = ""
+        attachments.removeAll()
+        screenshotError = nil
+        didContinueConversation = false
     }
 
     func openConversation(_ id: ConversationID) {

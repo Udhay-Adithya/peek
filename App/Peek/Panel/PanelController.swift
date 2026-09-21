@@ -92,6 +92,9 @@ final class PanelController {
         // afterwards, but "almost certainly" is not worth depending on.
         let frontApp = FrontmostApp.current()
 
+        // A new invocation is a new question.
+        viewModel.prepareForInvocation()
+
         let target = anchor ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
         let screens = NSScreen.screens.map {
             PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
@@ -122,6 +125,7 @@ final class PanelController {
                                                 screens: screens) {
             panel.setFrameOrigin(placement.origin)
         }
+        viewModel.prepareForInvocation()
         panel.makeKeyAndOrderFront(nil)
         installOutsideClickMonitor()
         viewModel.presentProvidedSelection(text: text, appName: appName)

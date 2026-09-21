@@ -35,9 +35,16 @@ enum MainMenu {
         menu.addItem(settings)
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Peek",
-                                action: #selector(NSApplication.terminate(_:)),
-                                keyEquivalent: "q"))
+
+        // ⌘Q hides rather than quits. Peek is a resident utility: quitting it
+        // by reflex from a window would silently disable the global shortcut
+        // and the Services entry. The menu bar item keeps a real Quit, and the
+        // title says "Hide" so the binding is not a lie about what it does.
+        let hide = NSMenuItem(title: "Hide Peek",
+                              action: #selector(AppDelegate.hideToMenuBar(_:)),
+                              keyEquivalent: "q")
+        hide.target = nil
+        menu.addItem(hide)
 
         item.submenu = menu
         return item
