@@ -57,6 +57,7 @@ struct AccessibilitySelectionCapture: Sendable {
 
         guard let focused = copyElement(root, kAXFocusedUIElementAttribute) else {
             Self.log(outcome: "unsupported-no-focused-element", app: frontApp)
+            Self.logAttributeNames(of: root, app: frontApp, label: "app-element")
             return .unsupported(appName: frontApp?.name)
         }
         AXUIElementSetMessagingTimeout(focused, Self.messagingTimeout)
@@ -74,6 +75,7 @@ struct AccessibilitySelectionCapture: Sendable {
             // selections. Distinct from an empty selection.
             Self.log(outcome: "unsupported-no-attribute", app: frontApp,
                      role: copyString(focused, kAXRoleAttribute))
+            Self.logAttributeNames(of: focused, app: frontApp)
             return .unsupported(appName: frontApp?.name)
         }
 
@@ -161,6 +163,24 @@ struct AccessibilitySelectionCapture: Sendable {
         let roleName = role ?? "n/a"
         let count = characters ?? 0
         logger.debug("capture outcome=\(outcome, privacy: .public) bundle=\(bundle, privacy: .public) role=\(roleName, privacy: .public) chars=\(count, privacy: .public)")
+    }
+
+    /// Logs which attributes an element actually exposes.
+    ///
+    /// Only reached when capture has already failed. Attribute *names* are
+    /// structural metadata, not user content, so they are safe to record; no
+    /// attribute value is ever read here.
+    private static func logAttributeNames(of element: AXUIElement,
+                                          app: FrontmostApp?,
+                                          label: String = "focused") {
+        var names: CFArray?
+        guard AXUIElementCopyAttributeNames(element, &names) == .success,
+              let list = names as? [String] else {
+            logger.debug("attrs \(label, privacy: .public) bundle=\(app?.bundleID ?? "unknown", privacy: .public) <unavailable>")
+            return
+        }
+        let joined = list.joined(separator: ",")
+        logger.debug("attrs \(label, privacy: .public) bundle=\(app?.bundleID ?? "unknown", privacy: .public) \(joined, privacy: .public)")
     }
 
     /// Whether the focused element is a password field.
