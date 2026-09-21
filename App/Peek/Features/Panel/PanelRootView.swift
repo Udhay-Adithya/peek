@@ -225,12 +225,18 @@ struct PanelRootView: View {
 
                 if model.canSend {
                     Button(action: send) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .imageScale(.large)
+                        Image(systemName: "arrow.up")
+                            .imageScale(.small)
+                            .fontWeight(.semibold)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
+                    // Liquid Glass belongs on controls layered over content,
+                    // not on the panel background: a full-bleed glass surface
+                    // over arbitrary desktop loses legibility, which is why the
+                    // panel chrome stays an NSVisualEffectView.
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     .disabled(model.session.isStreaming)
+                    .help("Send (\u{21A9})")
                 }
             }
 
