@@ -14,11 +14,23 @@ public struct GeminiProvider: AssistantProvider {
     public let identifier = ProviderIdentifier.gemini
     public let displayName = "Google Gemini"
 
+    /// Verified against `GET /v1beta/models` rather than written from memory.
+    /// Gemini 2.0 was shut down in June 2026; the `-latest` aliases are listed
+    /// first so the default keeps working as Google rolls the line forward.
     public let models: [ModelDescriptor] = [
+        ModelDescriptor(id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash", supportsImages: true),
+        ModelDescriptor(id: "gemini-3.8-flash", displayName: "Gemini 3.8 Flash", supportsImages: true),
+        ModelDescriptor(id: "gemini-flash-latest", displayName: "Gemini Flash (latest)", supportsImages: true),
+        ModelDescriptor(id: "gemini-3.1-pro-preview", displayName: "Gemini 3.1 Pro", supportsImages: true),
+        ModelDescriptor(id: "gemini-3.1-flash-lite", displayName: "Gemini 3.1 Flash Lite", supportsImages: true),
+        ModelDescriptor(id: "gemini-pro-latest", displayName: "Gemini Pro (latest)", supportsImages: true),
         ModelDescriptor(id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash", supportsImages: true),
-        ModelDescriptor(id: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro", supportsImages: true),
-        ModelDescriptor(id: "gemini-2.5-flash-lite", displayName: "Gemini 2.5 Flash Lite", supportsImages: true),
     ]
+
+    /// Defaults to a model verified to respond on the free tier. The newest
+    /// aliases were measured returning 503 "experiencing high demand", which
+    /// makes a poor first impression for a utility meant to feel instant.
+    public static let defaultModelID = "gemini-3.5-flash"
 
     private let client: StreamingHTTPClient
     private let apiKey: APIKeyProvider

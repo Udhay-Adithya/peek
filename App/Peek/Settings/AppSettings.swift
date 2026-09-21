@@ -24,7 +24,7 @@ final class AppSettings {
         self.providerID = ProviderIdentifier(
             rawValue: defaults.string(forKey: Key.providerID) ?? ProviderIdentifier.gemini.rawValue
         )
-        self.modelID = defaults.string(forKey: Key.modelID) ?? "gemini-2.5-flash"
+        self.modelID = defaults.string(forKey: Key.modelID) ?? GeminiProvider.defaultModelID
         self.autoSendOnInvoke = defaults.bool(forKey: Key.autoSend)
         // Defaults to on: without it, Electron and Gecko apps supply no
         // context at all, which is most browsers and most chat apps.

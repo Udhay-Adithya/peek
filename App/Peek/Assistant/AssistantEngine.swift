@@ -62,11 +62,14 @@ final class AssistantEngine {
 
         // Only one provider today. The switch exists so adding the next one is
         // a case rather than a refactor.
+        // Retry wrapper applied here rather than inside the adapter, so the
+        // policy is one decision for every provider instead of each vendor's
+        // idea of transience.
         switch identifier {
         case .gemini:
-            return GeminiProvider(apiKey: keyProvider)
+            return RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider))
         default:
-            return GeminiProvider(apiKey: keyProvider)
+            return RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider))
         }
     }
 }
