@@ -21,23 +21,39 @@ xcodegen generate
 xcodebuild -project Peek.xcodeproj -scheme Peek -configuration Debug build
 ```
 
-Tests run without building the app bundle:
+Core tests run without building the app bundle:
 
 ```bash
 cd Packages/PeekKit && swift test
 ```
 
+App-layer tests (session, capture cascade, continuation policy):
+
+```bash
+xcodebuild test -project Peek.xcodeproj -scheme Peek -destination "platform=macOS"
+```
+
+Performance baseline — see [docs/performance.md](docs/performance.md):
+
+```bash
+PEEK_BENCHMARK=1 <built>/Peek.app/Contents/MacOS/Peek
+```
+
 ## How it's invoked
 
-Force Click is **not** a trigger, and cannot be — see
-[ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) for the
-measurements. Peek uses a ladder of mechanisms that were verified to work:
+Force Click **is** supported, but not through any public API — no public
+mechanism exposes it, which
+[ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) establishes
+by measurement. It works by reading raw trackpad pressure through a private
+framework, resolved with `dlsym` so a future macOS disables the trigger rather
+than the app. It is **off by default**.
 
 | Trigger | Permission | Notes |
 |---|---|---|
 | `⌃⌥Space` global hotkey | none | `RegisterEventHotKey`; works on any input device |
 | "Ask Peek" in the Services menu | none | macOS supplies the selection on the pasteboard |
 | Menu bar item | none | Left click toggles, right click opens the menu |
+| **Force Click** | Accessibility | Off by default; reads pressure via a private framework, see ADR 0001 |
 
 ## How context is captured
 
@@ -57,7 +73,8 @@ Peek never reads from a deny-listed app, and never from a secure text field.
 ```
 Packages/PeekKit/          pure Swift, no AppKit — the testable core
   PeekCore                 stream events, request models, prompt composition,
-                           capture policy, panel geometry, image budget
+                           capture policy, panel geometry, image budget,
+                           force-click detection
   PeekProviders            provider protocol, SSE parsing, transport seam,
                            Gemini adapter, retry policy
   PeekPersistence          SwiftData conversation store behind a protocol
@@ -71,7 +88,10 @@ App/Peek/                  AppKit + SwiftUI
   Triggers/                hotkey, Services provider
   Capture/                 Accessibility, clipboard, ScreenCaptureKit
   Settings/                preferences, login item
+  Diagnostics/             benchmark harness
   Features/                SwiftUI views
+
+Tests/PeekTests/           app-layer tests (session, capture cascade)
 ```
 
 Two rules hold the design together:
