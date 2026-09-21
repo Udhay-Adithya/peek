@@ -20,6 +20,7 @@ final class PanelViewModel {
     let session: AssistantSession
 
     private let capture: AccessibilitySelectionCapture
+    private let clipboardCapture: ClipboardSelectionCapture
     private let settings: AppSettings
     private let engine: AssistantEngine
     private var captureTask: Task<Void, Never>?
@@ -29,10 +30,12 @@ final class PanelViewModel {
 
     init(settings: AppSettings,
          engine: AssistantEngine,
-         capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture()) {
+         capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture(),
+         clipboardCapture: ClipboardSelectionCapture = ClipboardSelectionCapture()) {
         self.settings = settings
         self.engine = engine
         self.capture = capture
+        self.clipboardCapture = clipboardCapture
         self.session = AssistantSession(engine: engine)
     }
 
@@ -73,7 +76,19 @@ final class PanelViewModel {
             }.value
 
             guard !Task.isCancelled, let self else { return }
-            self.selection = outcome
+
+            // Accessibility is always tried first: it is instantaneous, has no
+            // side effects, and gives selection bounds. The clipboard fallback
+            // only runs where the app genuinely exposes nothing.
+            let final: SelectionOutcome
+            if case .unsupported = outcome, self.settings.clipboardFallbackEnabled {
+                final = await self.clipboardCapture.capture(frontApp: frontApp)
+            } else {
+                final = outcome
+            }
+
+            guard !Task.isCancelled else { return }
+            self.selection = final
             self.isCapturing = false
             self.autoSendIfConfigured()
         }
