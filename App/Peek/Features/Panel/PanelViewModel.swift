@@ -39,11 +39,11 @@ final class PanelViewModel {
     /// conversation rather than starting a second one.
     let session: AssistantSession
 
-    private let capture: AccessibilitySelectionCapture
-    private let clipboardCapture: ClipboardSelectionCapture
+    private let capture: any SelectionCapturing
+    private let clipboardCapture: any ClipboardCapturing
     private let screenshots = ScreenshotService()
     private let settings: AppSettings
-    private let engine: AssistantEngine
+    private let engine: any ProviderResolving
     private var captureTask: Task<Void, Never>?
 
     /// Invoked when the user asks for settings from inside the panel.
@@ -66,12 +66,12 @@ final class PanelViewModel {
     var onExpand: (() -> Void)?
 
     init(settings: AppSettings,
-         engine: AssistantEngine,
+         engine: any ProviderResolving,
          store: ConversationStore,
          session: AssistantSession,
          history: HistoryViewModel,
-         capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture(),
-         clipboardCapture: ClipboardSelectionCapture = ClipboardSelectionCapture()) {
+         capture: any SelectionCapturing = AccessibilitySelectionCapture(),
+         clipboardCapture: any ClipboardCapturing = ClipboardSelectionCapture()) {
         self.settings = settings
         self.engine = engine
         self.store = store

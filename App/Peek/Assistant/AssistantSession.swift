@@ -30,7 +30,7 @@ final class AssistantSession {
     /// Notifies the menu bar so the status item can reflect in-flight work.
     var onStreamingChange: ((Bool) -> Void)?
 
-    private let engine: AssistantEngine
+    private let engine: any ProviderResolving
     private let store: ConversationStore
     private var streamTask: Task<Void, Never>?
 
@@ -46,7 +46,7 @@ final class AssistantSession {
 
     private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "assistant")
 
-    init(engine: AssistantEngine, store: ConversationStore) {
+    init(engine: any ProviderResolving, store: ConversationStore) {
         self.engine = engine
         self.store = store
     }
