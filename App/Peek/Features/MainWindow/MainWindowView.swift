@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import PeekCore
 import PeekPersistence
@@ -10,10 +11,12 @@ struct MainWindowView: View {
 
     @Bindable var session: AssistantSession
     @Bindable var history: HistoryViewModel
+    @Bindable var router: MainWindowRouter
+    @Bindable var settings: AppSettings
     let engine: AssistantEngine
-    let onOpenSettings: () -> Void
 
     @State private var prompt: String = ""
+    @State private var composerHeight: CGFloat = 22
     @FocusState private var promptFocused: Bool
     @State private var renamingID: ConversationID?
     @State private var renameText: String = ""
@@ -23,7 +26,10 @@ struct MainWindowView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)
         } detail: {
-            detail
+            switch router.pane {
+            case .conversations: detail
+            case .settings:      settingsPane
+            }
         }
         .onAppear {
             history.refresh()
@@ -34,33 +40,58 @@ struct MainWindowView: View {
     // MARK: - Sidebar
 
     private var sidebar: some View {
-        List(selection: Binding(
-            get: { session.conversationID },
-            set: { id in if let id { Task { await session.load(id) } } }
-        )) {
-            ForEach(history.conversations) { conversation in
-                row(for: conversation)
-                    .tag(conversation.id)
+        VStack(spacing: 0) {
+            List(selection: Binding(
+                get: { router.pane == .conversations ? session.conversationID : nil },
+                set: { id in
+                    if let id {
+                        router.pane = .conversations
+                        Task { await session.load(id) }
+                    }
+                }
+            )) {
+                ForEach(history.conversations) { conversation in
+                    row(for: conversation)
+                        .tag(conversation.id)
+                }
             }
+            .overlay {
+                if history.conversations.isEmpty {
+                    ContentUnavailableView(
+                        history.query.isEmpty ? "No Conversations" : "No Matches",
+                        systemImage: history.query.isEmpty ? "bubble.left.and.bubble.right" : "magnifyingglass",
+                        description: Text(history.query.isEmpty
+                                          ? "Invoke Peek with ⌃⌥Space to start one."
+                                          : "Try a different search.")
+                    )
+                }
+            }
+
+            Divider()
+
+            Button {
+                router.pane = .settings
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "gearshape")
+                    Text("Settings")
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(router.pane == .settings ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear))
+            .keyboardShortcut(",", modifiers: .command)
         }
         .searchable(text: $history.query, prompt: "Search conversations")
-        .overlay {
-            if history.conversations.isEmpty {
-                ContentUnavailableView(
-                    history.query.isEmpty ? "No Conversations" : "No Matches",
-                    systemImage: history.query.isEmpty ? "bubble.left.and.bubble.right" : "magnifyingglass",
-                    description: Text(history.query.isEmpty
-                                      ? "Invoke Peek with ⌃⌥Space to start one."
-                                      : "Try a different search.")
-                )
-            }
-        }
         .toolbar {
             ToolbarItem {
                 Button {
+                    router.pane = .conversations
                     session.reset()
                     history.refresh()
-                    promptFocused = true
                 } label: {
                     Label("New Conversation", systemImage: "square.and.pencil")
                 }
@@ -126,13 +157,17 @@ struct MainWindowView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: 200)
             }
-            ToolbarItem {
-                Button(action: onOpenSettings) {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .help("Settings (⌘,)")
-            }
         }
+    }
+
+    /// Settings rendered inside the window, rather than in a window of its own.
+    private var settingsPane: some View {
+        ScrollView {
+            SettingsView(settings: settings, engine: engine)
+                .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Settings")
     }
 
     private var transcript: some View {
@@ -166,11 +201,14 @@ struct MainWindowView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("Ask anything…", text: $prompt, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...8)
-                .focused($promptFocused)
-                .onSubmit(send)
+            PromptEditor(text: $prompt,
+                         minHeight: 22,
+                         maxHeight: 180,
+                         placeholder: "Ask anything…",
+                         font: .systemFont(ofSize: NSFont.systemFontSize),
+                         onSubmit: send,
+                         measuredHeight: $composerHeight)
+                .frame(height: composerHeight)
 
             if session.isStreaming {
                 Button("Stop") { session.cancel() }
@@ -194,7 +232,6 @@ struct MainWindowView: View {
         guard !outgoing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         prompt = ""
         session.send(prompt: outgoing, context: nil)
-        promptFocused = true
         // The sidebar shows titles and timestamps that this turn changes.
         Task {
             try? await Task.sleep(for: .milliseconds(250))

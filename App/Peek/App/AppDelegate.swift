@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeys: HotKeyManager?
     private var settings: AppSettings?
     private var engine: AssistantEngine?
-    private var settingsWindow: SettingsWindowController?
+    private var router: MainWindowRouter?
     private var services: ServicesProvider?
     private var mainWindow: MainWindowController?
 
@@ -32,10 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // far more than positioning and ordering an existing one.
         let settings = AppSettings()
         let engine = AssistantEngine(settings: settings)
-        let settingsWindow = SettingsWindowController(settings: settings, engine: engine)
+        let router = MainWindowRouter()
         self.settings = settings
         self.engine = engine
-        self.settingsWindow = settingsWindow
+        self.router = router
 
         let store = Self.makeStore()
         // Session and history live here, not in a view model: the panel and the
@@ -46,8 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mainWindow = MainWindowController {
             AnyView(MainWindowView(session: session,
                                    history: history,
-                                   engine: engine,
-                                   onOpenSettings: { settingsWindow.show() }))
+                                   router: router,
+                                   settings: settings,
+                                   engine: engine))
         }
         self.mainWindow = mainWindow
 
@@ -68,9 +69,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // non-activating panel floating above it looks broken and steals the
         // keystrokes meant for the key field. Assigned after `panel` exists so
         // the closure can capture it.
+        // Settings is a page in the window now, not a window of its own.
         viewModel.onOpenSettings = { [weak panel] in
             panel?.hide()
-            settingsWindow.show()
+            router.pane = .settings
+            mainWindow.show()
         }
 
         // Region capture needs the panel out of the shot, then back.
@@ -81,10 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onPrimaryAction: { [weak panel] in panel?.toggle() },
             onOpenSettings: { [weak panel] in
                 panel?.hide()
-                settingsWindow.show()
+                router.pane = .settings
+                mainWindow.show()
             },
             onOpenWindow: { [weak panel] in
                 panel?.hide()
+                router.pane = .conversations
                 mainWindow.show()
             },
             onQuit: { NSApp.terminate(nil) }
@@ -151,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Target for the ⌘, menu item, reached through the responder chain.
     @objc func openSettingsFromMenu(_ sender: Any?) {
         panel?.hide()
-        settingsWindow?.show()
+        router?.pane = .settings
+        mainWindow?.show()
     }
 }
