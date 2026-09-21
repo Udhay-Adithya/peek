@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import OSLog
 import PeekCore
 
 /// Reads the user's current selection through the Accessibility API.
@@ -33,6 +34,7 @@ struct AccessibilitySelectionCapture: Sendable {
         guard AXIsProcessTrusted() else { return .permissionRequired }
 
         guard policy.allowsCapture(fromBundleID: frontApp?.bundleID) else {
+            Self.log(outcome: "withheld-denylist", app: frontApp)
             return .withheld(appName: frontApp?.name)
         }
 
@@ -40,10 +42,21 @@ struct AccessibilitySelectionCapture: Sendable {
             activateChromiumAccessibility(pid: pid)
         }
 
-        let systemWide = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(systemWide, Self.messagingTimeout)
+        // Scope the query to the invoking application, NOT the system-wide
+        // element. The panel is already key by the time this runs, so the
+        // system-wide focused element is Peek own input field, which has no
+        // selection and makes every capture look empty. Asking the application
+        // element for its focused element is unaffected by who holds key focus.
+        let root: AXUIElement
+        if let pid = frontApp?.processID {
+            root = AXUIElementCreateApplication(pid)
+        } else {
+            root = AXUIElementCreateSystemWide()
+        }
+        AXUIElementSetMessagingTimeout(root, Self.messagingTimeout)
 
-        guard let focused = copyElement(systemWide, kAXFocusedUIElementAttribute) else {
+        guard let focused = copyElement(root, kAXFocusedUIElementAttribute) else {
+            Self.log(outcome: "unsupported-no-focused-element", app: frontApp)
             return .unsupported(appName: frontApp?.name)
         }
         AXUIElementSetMessagingTimeout(focused, Self.messagingTimeout)
@@ -52,18 +65,27 @@ struct AccessibilitySelectionCapture: Sendable {
         // A secure field reports role AXTextField with subrole
         // AXSecureTextField, so both are checked — some views set only one.
         if isSecureField(focused) {
+            Self.log(outcome: "withheld-secure-field", app: frontApp)
             return .withheld(appName: frontApp?.name)
         }
 
         guard let raw = copyString(focused, kAXSelectedTextAttribute) else {
             // The attribute is absent entirely: this app does not expose
             // selections. Distinct from an empty selection.
+            Self.log(outcome: "unsupported-no-attribute", app: frontApp,
+                     role: copyString(focused, kAXRoleAttribute))
             return .unsupported(appName: frontApp?.name)
         }
 
         guard let sanitized = policy.sanitize(raw) else {
+            Self.log(outcome: "empty-selection", app: frontApp,
+                     role: copyString(focused, kAXRoleAttribute))
             return .empty(appName: frontApp?.name)
         }
+
+        Self.log(outcome: "captured", app: frontApp,
+                 role: copyString(focused, kAXRoleAttribute),
+                 characters: sanitized.text.count)
 
         return .captured(SelectionContext(
             text: sanitized.text,
@@ -120,6 +142,25 @@ struct AccessibilitySelectionCapture: Sendable {
         // Accessibility reports top-left-origin coordinates; the panel works in
         // AppKit's bottom-left space.
         return ScreenGeometry.flipToAppKit(rect, primaryScreenMaxY: primaryScreenMaxY)
+    }
+
+    // MARK: - Diagnostics
+
+    private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "capture")
+
+    /// Redacted capture diagnostics.
+    ///
+    /// Records what happened and how much text was involved, never the text
+    /// itself. Selected text is exactly the sensitive payload this app exists
+    /// to handle and must not reach the unified log.
+    private static func log(outcome: String,
+                            app: FrontmostApp?,
+                            role: String? = nil,
+                            characters: Int? = nil) {
+        let bundle = app?.bundleID ?? "unknown"
+        let roleName = role ?? "n/a"
+        let count = characters ?? 0
+        logger.debug("capture outcome=\(outcome, privacy: .public) bundle=\(bundle, privacy: .public) role=\(roleName, privacy: .public) chars=\(count, privacy: .public)")
     }
 
     /// Whether the focused element is a password field.
