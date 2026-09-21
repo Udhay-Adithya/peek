@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: StatusItemController?
     private var panel: PanelController?
+    private var hotKeys: HotKeyManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu-bar resident: no Dock icon, no app switcher entry. Paired with
@@ -18,10 +19,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = PanelController()
         self.panel = panel
 
-        statusItem = StatusItemController(
+        let statusItem = StatusItemController(
             onPrimaryAction: { [weak panel] in panel?.toggle() },
             onQuit: { NSApp.terminate(nil) }
         )
+        self.statusItem = statusItem
+
+        // Primary trigger. Registration can legitimately fail when another app
+        // already owns the shortcut, and a silently dead hotkey is
+        // indistinguishable from a broken app, so it is surfaced in the menu
+        // bar rather than swallowed.
+        let hotKeys = HotKeyManager()
+        let registered = hotKeys.register(.defaultInvoke) { [weak panel] in
+            panel?.toggle()
+        }
+        self.hotKeys = hotKeys
+        statusItem.hotKeyStatus = registered ? .registered(.defaultInvoke)
+                                             : .unavailable(.defaultInvoke)
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

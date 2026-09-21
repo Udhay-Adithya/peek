@@ -13,6 +13,16 @@ final class StatusItemController {
     private let onQuit: () -> Void
     private let menu: NSMenu
 
+    /// Whether the global shortcut is actually live.
+    enum HotKeyStatus {
+        case registered(HotKey)
+        case unavailable(HotKey)
+    }
+
+    var hotKeyStatus: HotKeyStatus = .unavailable(.defaultInvoke) {
+        didSet { buildMenu() }
+    }
+
     /// Reflects in-flight assistant work. Set from the streaming layer later.
     var isBusy: Bool = false {
         didSet { guard isBusy != oldValue else { return }; updateAppearance() }
@@ -38,9 +48,23 @@ final class StatusItemController {
     }
 
     private func buildMenu() {
+        menu.removeAllItems()
+
         let open = NSMenuItem(title: "Open Peek", action: #selector(handleOpen), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+
+        switch hotKeyStatus {
+        case .registered(let key):
+            let item = NSMenuItem(title: "Shortcut: \(key.displayString)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        case .unavailable(let key):
+            let item = NSMenuItem(title: "\(key.displayString) unavailable — in use by another app",
+                                  action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        }
 
         menu.addItem(.separator())
 
