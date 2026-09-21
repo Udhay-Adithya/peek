@@ -111,6 +111,22 @@ final class PanelController {
         viewModel.refreshContext(frontApp: frontApp)
     }
 
+    /// Shows the panel with text supplied by the Services menu.
+    func show(providedText text: String, appName: String?) {
+        let screens = NSScreen.screens.map {
+            PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        }
+        let anchor = CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        if let placement = PanelPlacement.place(panelSize: panel.frame.size,
+                                                anchor: anchor,
+                                                screens: screens) {
+            panel.setFrameOrigin(placement.origin)
+        }
+        panel.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
+        viewModel.presentProvidedSelection(text: text, appName: appName)
+    }
+
     /// Re-shows the panel without re-reading the selection.
     ///
     /// Used after a region capture: the panel was hidden to get out of the

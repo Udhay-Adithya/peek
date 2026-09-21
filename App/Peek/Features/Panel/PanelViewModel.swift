@@ -226,6 +226,29 @@ final class PanelViewModel {
         contextDismissed = true
     }
 
+    /// Accepts a selection handed over by the Services menu.
+    ///
+    /// Bypasses Accessibility entirely: macOS already supplied the text, so any
+    /// in-flight capture is cancelled rather than allowed to overwrite it.
+    func presentProvidedSelection(text: String, appName: String?) {
+        captureTask?.cancel()
+        isCapturing = false
+        contextDismissed = false
+
+        guard let sanitized = CapturePolicy().sanitize(text) else {
+            selection = .empty(appName: appName)
+            return
+        }
+        selection = .captured(SelectionContext(
+            text: sanitized.text,
+            sourceAppName: appName,
+            sourceBundleID: nil,
+            selectionBounds: nil,
+            wasTruncated: sanitized.wasTruncated
+        ))
+        autoSendIfConfigured()
+    }
+
     // MARK: - Sending
 
     func send() {

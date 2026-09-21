@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings: AppSettings?
     private var engine: AssistantEngine?
     private var settingsWindow: SettingsWindowController?
+    private var services: ServicesProvider?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu-bar resident: no Dock icon, no app switcher entry. Paired with
@@ -60,6 +61,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuit: { NSApp.terminate(nil) }
         )
         self.statusItem = statusItem
+
+        // "Ask Peek" in every app's Services menu — no permissions required.
+        let services = ServicesProvider { [weak panel] text, appName in
+            panel?.show(providedText: text, appName: appName)
+        }
+        services.register()
+        self.services = services
 
         // Menu-bar activity indicator, driven by the streaming layer.
         viewModel.session.onStreamingChange = { [weak statusItem] streaming in
