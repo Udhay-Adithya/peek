@@ -156,7 +156,41 @@ struct PanelRootView: View {
 
     private var composer: some View {
         VStack(spacing: 6) {
+            if !model.attachments.isEmpty {
+                AttachmentStrip(attachments: model.attachments) { model.removeAttachment($0) }
+            }
+
+            if let error = model.screenshotError {
+                HStack(spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle").imageScale(.small)
+                    Text(error).font(.system(size: 10))
+                    if !ScreenRecordingPermission.isGranted {
+                        Button("Open Settings") { ScreenRecordingPermission.openSettings() }
+                            .buttonStyle(.link)
+                            .font(.system(size: 10))
+                    }
+                }
+                .foregroundStyle(.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             HStack(alignment: .bottom, spacing: 8) {
+                Menu {
+                    Button("Capture Screen") { model.captureScreen() }
+                    Button("Capture Region…") { model.captureRegion() }
+                } label: {
+                    Image(systemName: model.isCapturingScreenshot
+                          ? "camera.fill" : "camera")
+                        .imageScale(.medium)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(.secondary)
+                .disabled(model.isCapturingScreenshot)
+                .help("Attach a screenshot")
+                .accessibilityLabel("Attach a screenshot")
+
                 TextField(placeholder, text: $model.prompt, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
@@ -210,6 +244,15 @@ private struct MessageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if message.role == .user {
+                if message.attachmentCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "photo").imageScale(.small)
+                        Text("\(message.attachmentCount) screenshot\(message.attachmentCount == 1 ? "" : "s")")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
                 Text(message.text)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -363,5 +406,65 @@ private struct KeyHint: View {
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
             Text(label).font(.system(size: 10)).foregroundStyle(.tertiary)
         }
+    }
+}
+
+
+// MARK: - Attachments
+
+private struct AttachmentStrip: View {
+    let attachments: [PanelViewModel.PendingAttachment]
+    let onRemove: (UUID) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(attachments) { pending in
+                    ZStack(alignment: .topTrailing) {
+                        Group {
+                            if let preview = pending.preview {
+                                Image(nsImage: preview)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(width: 84, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.quaternary, lineWidth: 1)
+                        )
+
+                        Button {
+                            onRemove(pending.id)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .imageScale(.small)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.6))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(3)
+                        .help("Remove this screenshot")
+                        .accessibilityLabel("Remove screenshot")
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        // Size is worth surfacing: it is what the request costs.
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(pending.byteCount),
+                                                       countStyle: .file))
+                            .font(.system(size: 8, weight: .medium))
+                            .padding(.horizontal, 3)
+                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 3))
+                            .foregroundStyle(.white)
+                            .padding(3)
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .frame(height: 60)
     }
 }

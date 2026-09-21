@@ -14,6 +14,8 @@ final class AssistantSession {
         let id = UUID()
         let role: ChatMessage.Role
         var text: String
+        /// Number of images sent with this turn, for the transcript badge.
+        var attachmentCount: Int = 0
         var isStreaming: Bool = false
         var failure: String?
         var isRetryable: Bool = false
@@ -50,10 +52,14 @@ final class AssistantSession {
 
     // MARK: - Sending
 
-    func send(prompt: String, context: SelectionContext?) {
-        guard PromptComposer.canSend(prompt: prompt, context: context) else { return }
+    func send(prompt: String,
+              context: SelectionContext?,
+              attachments: [ImageAttachment] = []) {
+        guard PromptComposer.canSend(prompt: prompt, context: context, attachments: attachments) else { return }
 
-        let userMessage = PromptComposer.userMessage(prompt: prompt, context: context)
+        let userMessage = PromptComposer.userMessage(prompt: prompt,
+                                                     context: context,
+                                                     attachments: attachments)
 
         // History must be snapshotted BEFORE the new turn is shown, or the
         // user's message is sent twice: once from the transcript and once as
@@ -66,7 +72,8 @@ final class AssistantSession {
         let visible = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         messages.append(DisplayMessage(
             role: .user,
-            text: visible.isEmpty ? PromptComposer.implicitPrompt : visible
+            text: visible.isEmpty ? PromptComposer.implicitPrompt : visible,
+            attachmentCount: attachments.count
         ))
 
         let request = AssistantRequest(

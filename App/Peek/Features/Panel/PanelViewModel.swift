@@ -18,16 +18,37 @@ final class PanelViewModel {
 
     var prompt: String = ""
 
+    /// Pending screenshot attachments for the next turn.
+    ///
+    /// Only the encoded JPEG bytes plus a small preview are retained — never a
+    /// full-resolution `CGImage`, which for a 6K display would be tens of
+    /// megabytes held for as long as the panel is open.
+    private(set) var attachments: [PendingAttachment] = []
+    private(set) var isCapturingScreenshot = false
+    private(set) var screenshotError: String?
+
+    struct PendingAttachment: Identifiable, Sendable {
+        let id = UUID()
+        let attachment: ImageAttachment
+        let preview: NSImage?
+
+        var byteCount: Int { attachment.byteCount }
+    }
+
     let session: AssistantSession
 
     private let capture: AccessibilitySelectionCapture
     private let clipboardCapture: ClipboardSelectionCapture
+    private let screenshots = ScreenshotService()
     private let settings: AppSettings
     private let engine: AssistantEngine
     private var captureTask: Task<Void, Never>?
 
     /// Invoked when the user asks for settings from inside the panel.
     var onOpenSettings: (() -> Void)?
+    /// Used to get the panel out of the way of a region capture.
+    var onRequestHidePanel: (() -> Void)?
+    var onRequestShowPanel: (() -> Void)?
 
     let history: HistoryViewModel
 
@@ -66,7 +87,83 @@ final class PanelViewModel {
     }
 
     var canSend: Bool {
-        PromptComposer.canSend(prompt: prompt, context: activeContext)
+        PromptComposer.canSend(prompt: prompt,
+                               context: activeContext,
+                               attachments: attachments.map(\.attachment))
+    }
+
+    // MARK: - Screenshots
+
+    /// Captures the whole display. Always an explicit user action.
+    func captureScreen() {
+        runCapture { service in
+            try await service.captureDisplay(containing: NSEvent.mouseLocation)
+        }
+    }
+
+    /// Lets the user drag out a region, then captures it.
+    func captureRegion() {
+        guard !isCapturingScreenshot else { return }
+        isCapturingScreenshot = true
+        screenshotError = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isCapturingScreenshot = false }
+
+            guard self.ensureScreenRecordingPermission() else { return }
+
+            // The panel would otherwise sit on top of the region the user is
+            // trying to select.
+            self.onRequestHidePanel?()
+            let rect = await RegionSelectionOverlay().presentAndWaitForSelection()
+            self.onRequestShowPanel?()
+
+            guard let rect else { return }   // cancelled
+            do {
+                self.appendAttachment(try await self.screenshots.captureRegion(rect))
+            } catch {
+                self.screenshotError = error.localizedDescription
+            }
+        }
+    }
+
+    func removeAttachment(_ id: UUID) {
+        attachments.removeAll { $0.id == id }
+    }
+
+    private func runCapture(
+        _ body: @escaping @MainActor (ScreenshotService) async throws -> ImageAttachment
+    ) {
+        guard !isCapturingScreenshot else { return }
+        isCapturingScreenshot = true
+        screenshotError = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isCapturingScreenshot = false }
+            guard self.ensureScreenRecordingPermission() else { return }
+            do {
+                self.appendAttachment(try await body(self.screenshots))
+            } catch {
+                self.screenshotError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Requests Screen Recording only at the point of use.
+    private func ensureScreenRecordingPermission() -> Bool {
+        guard !ScreenRecordingPermission.isGranted else { return true }
+        ScreenRecordingPermission.request()
+        screenshotError = "Grant Screen Recording in System Settings, then try again."
+        return false
+    }
+
+    private func appendAttachment(_ attachment: ImageAttachment) {
+        attachments.append(PendingAttachment(
+            attachment: attachment,
+            preview: NSImage(data: attachment.data)
+        ))
     }
 
     // MARK: - Context
@@ -134,13 +231,20 @@ final class PanelViewModel {
     func send() {
         guard canSend, !session.isStreaming else { return }
         let outgoing = prompt
+        let outgoingAttachments = attachments.map(\.attachment)
         prompt = ""
-        session.send(prompt: outgoing, context: activeContext)
+        // Released as soon as the turn is dispatched; the request holds the
+        // only remaining reference to the bytes.
+        attachments.removeAll()
+        screenshotError = nil
+        session.send(prompt: outgoing, context: activeContext, attachments: outgoingAttachments)
     }
 
     func newConversation() {
         session.reset()
         prompt = ""
+        attachments.removeAll()
+        screenshotError = nil
     }
 
     func openSettings() {

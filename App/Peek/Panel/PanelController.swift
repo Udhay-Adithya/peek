@@ -111,6 +111,16 @@ final class PanelController {
         viewModel.refreshContext(frontApp: frontApp)
     }
 
+    /// Re-shows the panel without re-reading the selection.
+    ///
+    /// Used after a region capture: the panel was hidden to get out of the
+    /// shot, and re-capturing context at that point would read whatever app
+    /// happened to be frontmost rather than the original one.
+    func showWithoutRecapture() {
+        panel.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
+    }
+
     func hide() {
         removeOutsideClickMonitor()
         panel.orderOut(nil)

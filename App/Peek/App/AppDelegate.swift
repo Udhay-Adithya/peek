@@ -47,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow.show()
         }
 
+        // Region capture needs the panel out of the shot, then back.
+        viewModel.onRequestHidePanel = { [weak panel] in panel?.hide() }
+        viewModel.onRequestShowPanel = { [weak panel] in panel?.showWithoutRecapture() }
+
         let statusItem = StatusItemController(
             onPrimaryAction: { [weak panel] in panel?.toggle() },
             onOpenSettings: { [weak panel] in
