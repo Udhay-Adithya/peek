@@ -19,6 +19,9 @@ final class AssistantSession {
         var isStreaming: Bool = false
         var failure: String?
         var isRetryable: Bool = false
+        /// Reported by the provider, where it does. Shown so cost is visible
+        /// rather than something the user discovers on a bill.
+        var usage: TokenUsage?
     }
 
     private(set) var messages: [DisplayMessage] = []
@@ -237,6 +240,7 @@ final class AssistantSession {
         }
 
         if let usage = accumulator.usage {
+            messages[index].usage = usage
             Self.logger.debug("turn complete in=\(usage.inputTokens, privacy: .public) out=\(usage.outputTokens, privacy: .public)")
         }
 

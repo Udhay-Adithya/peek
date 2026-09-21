@@ -1,4 +1,5 @@
 import SwiftUI
+import PeekCore
 
 /// One turn in a transcript. Shared by the floating panel and the
 /// expanded window so both render conversations identically.
@@ -55,10 +56,18 @@ struct MessageRow: View {
             // Markdown via AttributedString: native, no third-party renderer.
             // Falls back to plain text mid-stream, when the markup is
             // necessarily incomplete.
-            Text(Self.render(message.text))
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Self.render(message.text))
+                    .font(.system(size: 13))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let usage = message.usage, !message.isStreaming {
+                    Text("\(usage.inputTokens) in · \(usage.outputTokens) out")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.quaternary)
+                }
+            }
         }
     }
 
