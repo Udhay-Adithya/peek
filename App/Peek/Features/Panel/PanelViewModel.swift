@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PeekCore
+import PeekPersistence
 
 /// State behind the floating panel.
 @MainActor
@@ -28,15 +29,32 @@ final class PanelViewModel {
     /// Invoked when the user asks for settings from inside the panel.
     var onOpenSettings: (() -> Void)?
 
+    let history: HistoryViewModel
+
+    /// Whether the history list is showing.
+    var isShowingHistory = false
+
     init(settings: AppSettings,
          engine: AssistantEngine,
+         store: ConversationStore,
          capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture(),
          clipboardCapture: ClipboardSelectionCapture = ClipboardSelectionCapture()) {
         self.settings = settings
         self.engine = engine
         self.capture = capture
         self.clipboardCapture = clipboardCapture
-        self.session = AssistantSession(engine: engine)
+        self.session = AssistantSession(engine: engine, store: store)
+        self.history = HistoryViewModel(store: store)
+    }
+
+    func showHistory() {
+        isShowingHistory = true
+        history.refresh()
+    }
+
+    func openConversation(_ id: ConversationID) {
+        isShowingHistory = false
+        Task { await session.load(id) }
     }
 
     var hasCredentials: Bool { engine.hasCredentials }

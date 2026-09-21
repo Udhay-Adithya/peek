@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OSLog
 import PeekCore
+import PeekPersistence
 import PeekProviders
 
 /// One live conversation, rendered progressively.
@@ -25,14 +26,24 @@ final class AssistantSession {
     var onStreamingChange: ((Bool) -> Void)?
 
     private let engine: AssistantEngine
+    private let store: ConversationStore
     private var streamTask: Task<Void, Never>?
+
+    /// The conversation being written to. Created lazily on first send, so
+    /// merely opening the panel does not litter the history with empty rows.
+    private(set) var conversationID: ConversationID?
+
+    /// Serialises persistence so two quick sends cannot each create their own
+    /// conversation for what the user experiences as one thread.
+    private var persistenceChain: Task<Void, Never>?
     /// Retained so a failed turn can be retried without recomposing context.
     private var lastRequest: AssistantRequest?
 
     private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "assistant")
 
-    init(engine: AssistantEngine) {
+    init(engine: AssistantEngine, store: ConversationStore) {
         self.engine = engine
+        self.store = store
     }
 
     var isEmpty: Bool { messages.isEmpty }
@@ -64,7 +75,27 @@ final class AssistantSession {
             messages: history
         )
         lastRequest = request
+
+        persist(PersistedMessage(role: .user, text: messages.last?.text ?? visible),
+                title: PromptComposer.title(fromPrompt: prompt, context: context),
+                sourceAppName: context?.sourceAppName)
+
         startStream(request)
+    }
+
+    /// Replaces the transcript with a stored conversation.
+    func load(_ id: ConversationID) async {
+        cancel()
+        do {
+            let stored = try await store.messages(in: id)
+            messages = stored.map {
+                DisplayMessage(role: $0.role, text: $0.text)
+            }
+            conversationID = id
+            lastRequest = nil
+        } catch {
+            Self.logger.error("failed to load conversation")
+        }
     }
 
     func retry() {
@@ -94,6 +125,43 @@ final class AssistantSession {
         cancel()
         messages.removeAll()
         lastRequest = nil
+        // A fresh conversation, not a continuation of the stored one.
+        conversationID = nil
+    }
+
+    // MARK: - Persistence
+
+    /// Appends to the store without blocking the UI.
+    ///
+    /// Chained rather than fired in parallel: the first call may still be
+    /// creating the conversation when the second arrives, and unsynchronised
+    /// creation produces two conversations for one thread.
+    private func persist(_ message: PersistedMessage, title: String, sourceAppName: String?) {
+        let previous = persistenceChain
+        let store = self.store
+        let providerID = engine.currentProvider().identifier.rawValue
+        let modelID = engine.selectedModelID
+
+        persistenceChain = Task { [weak self] in
+            _ = await previous?.value
+            guard let self else { return }
+            do {
+                let id: ConversationID
+                if let existing = self.conversationID {
+                    id = existing
+                } else {
+                    id = try await store.createConversation(title: title,
+                                                            providerID: providerID,
+                                                            modelID: modelID,
+                                                            sourceAppName: sourceAppName)
+                    self.conversationID = id
+                }
+                try await store.appendMessage(message, to: id)
+            } catch {
+                // Persistence must never break a live conversation.
+                Self.logger.error("failed to persist message")
+            }
+        }
     }
 
     // MARK: - Streaming
@@ -163,6 +231,11 @@ final class AssistantSession {
 
         if let usage = accumulator.usage {
             Self.logger.debug("turn complete in=\(usage.inputTokens, privacy: .public) out=\(usage.outputTokens, privacy: .public)")
+        }
+
+        if !accumulator.text.isEmpty {
+            persist(PersistedMessage(role: .assistant, text: accumulator.text),
+                    title: "Conversation", sourceAppName: nil)
         }
         finishStreaming()
     }

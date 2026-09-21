@@ -16,6 +16,14 @@ struct PanelRootView: View {
             composer
         }
         .onAppear { promptFocused = true }
+        .sheet(isPresented: $model.isShowingHistory) {
+            HistoryView(
+                model: model.history,
+                onOpen: { model.openConversation($0) },
+                onClose: { model.isShowingHistory = false }
+            )
+            .frame(width: 420, height: 340)
+        }
     }
 
     // MARK: - Header
@@ -54,6 +62,18 @@ struct PanelRootView: View {
             if model.isCapturing {
                 ProgressView().controlSize(.small).scaleEffect(0.6)
             }
+
+            Button {
+                model.showHistory()
+            } label: {
+                Image(systemName: "clock")
+                    .imageScale(.small)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Conversation history (\u{2318}K)")
+            .keyboardShortcut("k", modifiers: .command)
+            .accessibilityLabel("Conversation history")
 
             Button {
                 model.openSettings()

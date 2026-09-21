@@ -41,6 +41,8 @@ targets:
         product: PeekProviders
       - package: PeekKit
         product: PeekSecurity
+      - package: PeekKit
+        product: PeekPersistence
     settings:
       base:
         PRODUCT_NAME: Peek

@@ -1,4 +1,7 @@
 import AppKit
+import OSLog
+import PeekCore
+import PeekPersistence
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -31,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.engine = engine
         self.settingsWindow = settingsWindow
 
-        let viewModel = PanelViewModel(settings: settings, engine: engine)
+        let viewModel = PanelViewModel(settings: settings, engine: engine, store: Self.makeStore())
         let panel = PanelController(viewModel: viewModel)
         self.panel = panel
 
@@ -74,6 +77,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         true
+    }
+
+    /// Conversation storage, falling back to an in-memory store.
+    ///
+    /// A corrupt or unwritable store must not stop the assistant working; the
+    /// user loses history, not the product.
+    private static func makeStore() -> ConversationStore {
+        let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "persistence")
+        do {
+            return SwiftDataConversationStore(modelContainer: try PeekModelContainer.makeOnDisk())
+        } catch {
+            logger.error("on-disk store unavailable, falling back to memory")
+            do {
+                return SwiftDataConversationStore(modelContainer: try PeekModelContainer.makeInMemory())
+            } catch {
+                fatalError("SwiftData could not create even an in-memory container")
+            }
+        }
     }
 
     /// Target for the ⌘, menu item, reached through the responder chain.
