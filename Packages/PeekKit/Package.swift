@@ -9,9 +9,15 @@ let package = Package(
     platforms: [.macOS("26.0")],
     products: [
         .library(name: "PeekCore", targets: ["PeekCore"]),
+        .library(name: "PeekProviders", targets: ["PeekProviders"]),
+        .library(name: "PeekSecurity", targets: ["PeekSecurity"]),
     ],
     targets: [
         .target(name: "PeekCore"),
+        .target(name: "PeekProviders", dependencies: ["PeekCore"]),
+        .target(name: "PeekSecurity"),
         .testTarget(name: "PeekCoreTests", dependencies: ["PeekCore"]),
+        .testTarget(name: "PeekProvidersTests", dependencies: ["PeekProviders"]),
+        .testTarget(name: "PeekSecurityTests", dependencies: ["PeekSecurity"]),
     ]
 )
