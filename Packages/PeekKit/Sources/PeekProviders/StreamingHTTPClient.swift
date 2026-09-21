@@ -69,11 +69,20 @@ public struct URLSessionStreamingClient: StreamingHTTPClient {
             })
         )
 
+        // Deliberately NOT `bytes.lines`: Foundation's AsyncLineSequence drops
+        // empty lines, and an empty line is exactly what dispatches a
+        // server-sent event. See LineBuffer.
         let lines = AsyncThrowingStream<String, Error> { continuation in
             let task = Task {
+                var buffer = LineBuffer()
                 do {
-                    for try await line in bytes.lines {
-                        continuation.yield(line)
+                    for try await byte in bytes {
+                        if let line = buffer.append(byte) {
+                            continuation.yield(line)
+                        }
+                    }
+                    if let trailing = buffer.flush() {
+                        continuation.yield(trailing)
                     }
                     continuation.finish()
                 } catch {

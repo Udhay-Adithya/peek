@@ -17,7 +17,7 @@ let package = Package(
         .target(name: "PeekProviders", dependencies: ["PeekCore"]),
         .target(name: "PeekSecurity"),
         .testTarget(name: "PeekCoreTests", dependencies: ["PeekCore"]),
-        .testTarget(name: "PeekProvidersTests", dependencies: ["PeekProviders"]),
+        .testTarget(name: "PeekProvidersTests", dependencies: ["PeekProviders"], resources: [.copy("Fixtures")]),
         .testTarget(name: "PeekSecurityTests", dependencies: ["PeekSecurity"]),
     ]
 )
