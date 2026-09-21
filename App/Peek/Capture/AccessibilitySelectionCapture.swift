@@ -36,6 +36,10 @@ struct AccessibilitySelectionCapture: Sendable {
             return .withheld(appName: frontApp?.name)
         }
 
+        if let pid = frontApp?.processID {
+            activateChromiumAccessibility(pid: pid)
+        }
+
         let systemWide = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(systemWide, Self.messagingTimeout)
 
@@ -68,6 +72,24 @@ struct AccessibilitySelectionCapture: Sendable {
             selectionBounds: selectionBounds(of: focused, primaryScreenMaxY: primaryScreenMaxY),
             wasTruncated: sanitized.wasTruncated
         ))
+    }
+
+    /// Asks a Chromium-based app to switch its accessibility tree on.
+    ///
+    /// Chromium (and therefore every Electron app — VS Code, Slack, Discord,
+    /// Claude) keeps its accessibility tree switched off until an assistive
+    /// client sets `AXManualAccessibility` on the application element. Without
+    /// this, those apps expose no selection at all and are indistinguishable
+    /// from apps that genuinely do not support it.
+    ///
+    /// Best-effort and deliberately unchecked: on a non-Chromium app the
+    /// attribute is simply unknown and the call fails harmlessly. Gecko-based
+    /// apps such as Firefox and Zen use their own activation path and are not
+    /// covered by this.
+    private func activateChromiumAccessibility(pid: pid_t) {
+        let appElement = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(appElement, Self.messagingTimeout)
+        AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 
     // MARK: - Selection bounds
