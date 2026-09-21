@@ -10,6 +10,7 @@ final class StatusItemController {
 
     private let statusItem: NSStatusItem
     private let onPrimaryAction: () -> Void
+    private let onOpenSettings: () -> Void
     private let onQuit: () -> Void
     private let menu: NSMenu
 
@@ -28,8 +29,11 @@ final class StatusItemController {
         didSet { guard isBusy != oldValue else { return }; updateAppearance() }
     }
 
-    init(onPrimaryAction: @escaping () -> Void, onQuit: @escaping () -> Void) {
+    init(onPrimaryAction: @escaping () -> Void,
+         onOpenSettings: @escaping () -> Void,
+         onQuit: @escaping () -> Void) {
         self.onPrimaryAction = onPrimaryAction
+        self.onOpenSettings = onOpenSettings
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.menu = NSMenu()
@@ -113,8 +117,7 @@ final class StatusItemController {
     @objc private func handleOpen() { onPrimaryAction() }
 
     @objc private func handleSettings() {
-        // Settings UI arrives with the provider configuration phase.
-        NSSound.beep()
+        onOpenSettings()
     }
 
     @objc private func handleQuit() { onQuit() }

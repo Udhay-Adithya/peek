@@ -37,6 +37,10 @@ targets:
     dependencies:
       - package: PeekKit
         product: PeekCore
+      - package: PeekKit
+        product: PeekProviders
+      - package: PeekKit
+        product: PeekSecurity
     settings:
       base:
         PRODUCT_NAME: Peek

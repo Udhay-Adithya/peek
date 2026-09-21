@@ -17,12 +17,38 @@ final class PanelViewModel {
 
     var prompt: String = ""
 
+    let session: AssistantSession
+
     private let capture: AccessibilitySelectionCapture
+    private let settings: AppSettings
+    private let engine: AssistantEngine
     private var captureTask: Task<Void, Never>?
 
-    init(capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture()) {
+    /// Invoked when the user asks for settings from inside the panel.
+    var onOpenSettings: (() -> Void)?
+
+    init(settings: AppSettings,
+         engine: AssistantEngine,
+         capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture()) {
+        self.settings = settings
+        self.engine = engine
         self.capture = capture
+        self.session = AssistantSession(engine: engine)
     }
+
+    var hasCredentials: Bool { engine.hasCredentials }
+
+    /// The context actually in play, honouring an explicit dismissal.
+    var activeContext: SelectionContext? {
+        guard !contextDismissed, case .captured(let context) = selection else { return nil }
+        return context
+    }
+
+    var canSend: Bool {
+        PromptComposer.canSend(prompt: prompt, context: activeContext)
+    }
+
+    // MARK: - Context
 
     /// Reads the selection for `frontApp` without blocking the panel.
     ///
@@ -46,16 +72,49 @@ final class PanelViewModel {
                 await capture.capture(frontApp: frontApp, primaryScreenMaxY: primaryMaxY)
             }.value
 
-            guard !Task.isCancelled else { return }
-            self?.selection = outcome
-            self?.isCapturing = false
+            guard !Task.isCancelled, let self else { return }
+            self.selection = outcome
+            self.isCapturing = false
+            self.autoSendIfConfigured()
         }
     }
 
-    /// Drops the captured context for this invocation.
+    /// Fires the request immediately, when the user has opted in.
+    ///
+    /// Gated on an explicit setting, on the conversation being fresh, and on
+    /// credentials existing. Sending on every invocation would spend tokens and
+    /// ship the selection to a third party on what may have been a misfire.
+    private func autoSendIfConfigured() {
+        guard settings.autoSendOnInvoke,
+              session.isEmpty,
+              engine.hasCredentials,
+              activeContext != nil else { return }
+        send()
+    }
+
     func dismissContext() {
         contextDismissed = true
     }
+
+    // MARK: - Sending
+
+    func send() {
+        guard canSend, !session.isStreaming else { return }
+        let outgoing = prompt
+        prompt = ""
+        session.send(prompt: outgoing, context: activeContext)
+    }
+
+    func newConversation() {
+        session.reset()
+        prompt = ""
+    }
+
+    func openSettings() {
+        onOpenSettings?()
+    }
+
+    // MARK: - Permissions
 
     func requestAccessibilityPermission() {
         AccessibilityPermission.prompt()
@@ -63,11 +122,5 @@ final class PanelViewModel {
 
     func openAccessibilitySettings() {
         AccessibilityPermission.openSettings()
-    }
-
-    /// The context actually in play, honouring an explicit dismissal.
-    var activeContext: SelectionContext? {
-        guard !contextDismissed, case .captured(let context) = selection else { return nil }
-        return context
     }
 }

@@ -12,7 +12,7 @@ import PeekCore
 final class PanelController {
 
     private let panel: PeekPanel
-    private let viewModel = PanelViewModel()
+    private let viewModel: PanelViewModel
     private var outsideClickMonitor: Any?
 
     private static let defaultSize = CGSize(width: 440, height: 300)
@@ -20,7 +20,8 @@ final class PanelController {
 
     var isVisible: Bool { panel.isVisible }
 
-    init() {
+    init(viewModel: PanelViewModel) {
+        self.viewModel = viewModel
         panel = PeekPanel(
             contentRect: CGRect(origin: .zero, size: Self.defaultSize),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable, .closable],
