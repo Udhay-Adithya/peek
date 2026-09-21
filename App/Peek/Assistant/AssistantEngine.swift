@@ -22,6 +22,10 @@ final class AssistantEngine {
 
     var selectedModelID: String { settings.modelID }
 
+    func selectModel(_ id: String) {
+        settings.modelID = id
+    }
+
     var availableProviders: [AssistantProvider] { [makeProvider(.gemini)] }
 
     func currentProvider() -> AssistantProvider {

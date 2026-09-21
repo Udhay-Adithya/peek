@@ -37,6 +37,16 @@ struct PanelRootView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
 
+            if model.didContinueConversation {
+                // Resuming a thread silently would be surprising; say so.
+                Text("continued")
+                    .font(.system(size: 9, weight: .medium))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.quaternary, in: Capsule())
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
 
             if model.session.isStreaming {
@@ -62,6 +72,18 @@ struct PanelRootView: View {
             if model.isCapturing {
                 ProgressView().controlSize(.small).scaleEffect(0.6)
             }
+
+            Button {
+                model.expand()
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .imageScale(.small)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Open in window (\u{2318}\u{21E7}O)")
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .accessibilityLabel("Open in window")
 
             Button {
                 model.showHistory()
@@ -235,76 +257,6 @@ struct PanelRootView: View {
     }
 }
 
-// MARK: - Message row
-
-private struct MessageRow: View {
-    let message: AssistantSession.DisplayMessage
-    let onRetry: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if message.role == .user {
-                if message.attachmentCount > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "photo").imageScale(.small)
-                        Text("\(message.attachmentCount) screenshot\(message.attachmentCount == 1 ? "" : "s")")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-                Text(message.text)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                assistantBody
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var assistantBody: some View {
-        if let failure = message.failure {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .imageScale(.small)
-                    Text(failure).font(.system(size: 12))
-                }
-                .foregroundStyle(.orange)
-
-                if message.isRetryable {
-                    Button("Retry", action: onRetry)
-                        .controlSize(.small)
-                }
-            }
-        } else if message.text.isEmpty, message.isStreaming {
-            // Thinking indicator before the first token lands.
-            ProgressView().controlSize(.small).scaleEffect(0.7)
-        } else {
-            // Markdown via AttributedString: native, no third-party renderer.
-            // Falls back to plain text mid-stream, when the markup is
-            // necessarily incomplete.
-            Text(Self.render(message.text))
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private static func render(_ markdown: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: markdown,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(markdown)
-    }
-}
-
 // MARK: - Pieces
 
 private struct ContextChip: View {
@@ -392,23 +344,6 @@ private struct NoteRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
-private struct KeyHint: View {
-    let key: String
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(key)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-            Text(label).font(.system(size: 10)).foregroundStyle(.tertiary)
-        }
-    }
-}
-
 
 // MARK: - Attachments
 

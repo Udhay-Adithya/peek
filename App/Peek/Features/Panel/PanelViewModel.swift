@@ -35,6 +35,8 @@ final class PanelViewModel {
         var byteCount: Int { attachment.byteCount }
     }
 
+    /// Shared with the expanded window, so "expand" continues the same
+    /// conversation rather than starting a second one.
     let session: AssistantSession
 
     private let capture: AccessibilitySelectionCapture
@@ -55,17 +57,56 @@ final class PanelViewModel {
     /// Whether the history list is showing.
     var isShowingHistory = false
 
+    /// Set when the panel resumed an existing conversation on invocation.
+    private(set) var didContinueConversation = false
+
+    private let store: ConversationStore
+
+    /// Invoked when the user expands the panel into the full window.
+    var onExpand: (() -> Void)?
+
     init(settings: AppSettings,
          engine: AssistantEngine,
          store: ConversationStore,
+         session: AssistantSession,
+         history: HistoryViewModel,
          capture: AccessibilitySelectionCapture = AccessibilitySelectionCapture(),
          clipboardCapture: ClipboardSelectionCapture = ClipboardSelectionCapture()) {
         self.settings = settings
         self.engine = engine
+        self.store = store
         self.capture = capture
         self.clipboardCapture = clipboardCapture
-        self.session = AssistantSession(engine: engine, store: store)
-        self.history = HistoryViewModel(store: store)
+        self.session = session
+        self.history = history
+    }
+
+    func expand() {
+        onExpand?()
+    }
+
+    /// Resumes a recent conversation when the invocation plausibly belongs to it.
+    ///
+    /// Conditions are deliberately narrow — same source app, inside the time
+    /// window, and nothing already on screen. Anything looser and unrelated
+    /// questions accumulate into one unusable thread, which is the failure mode
+    /// this feature invites.
+    private func continueRecentConversationIfAppropriate(sourceAppName: String?) async {
+        guard settings.continueRecentConversation,
+              session.isEmpty,
+              session.conversationID == nil else { return }
+
+        do {
+            guard let candidate = try await store.mostRecentConversation(
+                updatedWithin: AppSettings.continuationWindow
+            ) else { return }
+            guard candidate.sourceAppName == sourceAppName else { return }
+
+            await session.load(candidate.id)
+            didContinueConversation = true
+        } catch {
+            // Continuation is a convenience; failing it must be silent.
+        }
     }
 
     func showHistory() {
@@ -176,6 +217,7 @@ final class PanelViewModel {
     func refreshContext(frontApp: FrontmostApp?) {
         captureTask?.cancel()
         contextDismissed = false
+        didContinueConversation = false
         isCapturing = true
 
         let capture = self.capture
@@ -205,6 +247,12 @@ final class PanelViewModel {
             guard !Task.isCancelled else { return }
             self.selection = final
             self.isCapturing = false
+
+            if case .captured(let context) = final {
+                await self.continueRecentConversationIfAppropriate(
+                    sourceAppName: context.sourceAppName
+                )
+            }
             self.autoSendIfConfigured()
         }
     }
@@ -265,6 +313,7 @@ final class PanelViewModel {
 
     func newConversation() {
         session.reset()
+        didContinueConversation = false
         prompt = ""
         attachments.removeAll()
         screenshotError = nil

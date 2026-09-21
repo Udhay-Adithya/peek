@@ -2,6 +2,7 @@ import AppKit
 import OSLog
 import PeekCore
 import PeekPersistence
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -13,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var engine: AssistantEngine?
     private var settingsWindow: SettingsWindowController?
     private var services: ServicesProvider?
+    private var mainWindow: MainWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu-bar resident: no Dock icon, no app switcher entry. Paired with
@@ -35,9 +37,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.engine = engine
         self.settingsWindow = settingsWindow
 
-        let viewModel = PanelViewModel(settings: settings, engine: engine, store: Self.makeStore())
+        let store = Self.makeStore()
+        // Session and history live here, not in a view model: the panel and the
+        // expanded window are two views onto one conversation.
+        let session = AssistantSession(engine: engine, store: store)
+        let history = HistoryViewModel(store: store)
+
+        let mainWindow = MainWindowController {
+            AnyView(MainWindowView(session: session,
+                                   history: history,
+                                   engine: engine,
+                                   onOpenSettings: { settingsWindow.show() }))
+        }
+        self.mainWindow = mainWindow
+
+        let viewModel = PanelViewModel(settings: settings,
+                                       engine: engine,
+                                       store: store,
+                                       session: session,
+                                       history: history)
         let panel = PanelController(viewModel: viewModel)
         self.panel = panel
+
+        viewModel.onExpand = { [weak panel] in
+            panel?.hide()
+            mainWindow.show()
+        }
 
         // Settings is a conventional, activating window; leaving the
         // non-activating panel floating above it looks broken and steals the
@@ -57,6 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenSettings: { [weak panel] in
                 panel?.hide()
                 settingsWindow.show()
+            },
+            onOpenWindow: { [weak panel] in
+                panel?.hide()
+                mainWindow.show()
             },
             onQuit: { NSApp.terminate(nil) }
         )
@@ -89,6 +118,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         true
+    }
+
+    /// Peek is a menu-bar utility, so closing the window must not quit it.
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool {
+        false
+    }
+
+    /// Drops the Dock icon again once the last ordinary window closes.
+    func applicationDidUpdate(_ notification: Notification) {
+        mainWindow?.restoreAccessoryPolicyIfNeeded()
     }
 
     /// Conversation storage, falling back to an in-memory store.

@@ -95,6 +95,12 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                Toggle("Continue the previous conversation when invoked again from the same app",
+                       isOn: $settings.continueRecentConversation)
+                Text("Applies within five minutes, and only when the panel is empty. Otherwise each invocation starts fresh.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Use clipboard fallback for unsupported apps", isOn: $settings.clipboardFallbackEnabled)
                 Text("Some apps (Electron and Firefox-based, such as Obsidian or Zen) expose no selection to macOS. Peek can briefly copy the selection instead. Your clipboard is restored afterwards, and this never runs in password managers.")
                     .font(.caption)

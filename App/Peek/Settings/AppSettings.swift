@@ -15,7 +15,15 @@ final class AppSettings {
         static let modelID = "model.selected"
         static let autoSend = "behaviour.autoSendOnInvoke"
         static let clipboardFallback = "capture.clipboardFallbackEnabled"
+        static let continueRecent = "behaviour.continueRecentConversation"
     }
+
+    /// How recently a conversation must have been touched to be resumed.
+    ///
+    /// Five minutes: long enough to cover a follow-up thought, short enough
+    /// that this morning's conversation does not absorb this afternoon's
+    /// unrelated question.
+    static let continuationWindow: TimeInterval = 5 * 60
 
     private let defaults: UserDefaults
 
@@ -29,6 +37,7 @@ final class AppSettings {
         // Defaults to on: without it, Electron and Gecko apps supply no
         // context at all, which is most browsers and most chat apps.
         self.clipboardFallbackEnabled = defaults.object(forKey: Key.clipboardFallback) as? Bool ?? true
+        self.continueRecentConversation = defaults.object(forKey: Key.continueRecent) as? Bool ?? true
     }
 
     var providerID: ProviderIdentifier {
@@ -49,5 +58,10 @@ final class AppSettings {
 
     var clipboardFallbackEnabled: Bool {
         didSet { defaults.set(clipboardFallbackEnabled, forKey: Key.clipboardFallback) }
+    }
+
+    /// Whether invoking from the same app shortly after continues that thread.
+    var continueRecentConversation: Bool {
+        didSet { defaults.set(continueRecentConversation, forKey: Key.continueRecent) }
     }
 }

@@ -11,6 +11,7 @@ final class StatusItemController {
     private let statusItem: NSStatusItem
     private let onPrimaryAction: () -> Void
     private let onOpenSettings: () -> Void
+    private let onOpenWindow: () -> Void
     private let onQuit: () -> Void
     private let menu: NSMenu
 
@@ -31,9 +32,11 @@ final class StatusItemController {
 
     init(onPrimaryAction: @escaping () -> Void,
          onOpenSettings: @escaping () -> Void,
+         onOpenWindow: @escaping () -> Void,
          onQuit: @escaping () -> Void) {
         self.onPrimaryAction = onPrimaryAction
         self.onOpenSettings = onOpenSettings
+        self.onOpenWindow = onOpenWindow
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.menu = NSMenu()
@@ -69,6 +72,10 @@ final class StatusItemController {
             item.isEnabled = false
             menu.addItem(item)
         }
+
+        let window = NSMenuItem(title: "Conversations…", action: #selector(handleOpenWindow), keyEquivalent: "")
+        window.target = self
+        menu.addItem(window)
 
         menu.addItem(.separator())
 
@@ -118,6 +125,10 @@ final class StatusItemController {
 
     @objc private func handleSettings() {
         onOpenSettings()
+    }
+
+    @objc private func handleOpenWindow() {
+        onOpenWindow()
     }
 
     @objc private func handleQuit() { onQuit() }
