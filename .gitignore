@@ -25,3 +25,7 @@ Package.resolved
 *.provisionprofile
 .env
 .env.*
+
+# Spike build artifacts
+Spike/**/*.app/
+Spike/**/probe.log
