@@ -110,3 +110,70 @@ mechanisms that were verified to work:
   a pressure event; there is nothing to poll.
 - **AX notification on selection change as a proxy.** Fires on ordinary
   selection, not on an intentional gesture. Would invoke constantly.
+
+---
+
+## Addendum — exhaustive CGEventField scan (2026-09-21)
+
+A claim circulating in sample code holds that trackpad pressure rides along on
+ordinary mouse events in undocumented `CGEventField` 148, scaling past 1.0 for a
+Force Click. Since ADR 0001 only tested event type 34, this was a genuinely
+different mechanism and was measured separately (`Spike/PressureFieldProbe/`).
+
+**Method.** Session-level listen-only tap on `leftMouseDown`, `leftMouseUp`,
+`leftMouseDragged` and type 34. Every field from 0 to 255 was read as both
+`getDoubleValueField` and `getIntegerValueField`, counting only events whose
+`eventTargetUnixProcessID` was another process. The user then performed five
+normal clicks followed by five hard Force Clicks, with each click's complete
+non-zero field set logged and numbered.
+
+**Result.** Clicks 1–5 (normal) and 6–10 (Force Click) produced *identical*
+field signatures. The only variation was in:
+
+| Field | Meaning | Varies because |
+|---|---|---|
+| 0 | mouse event number | monotonic counter |
+| 1 | click state | multi-click sequence counter |
+| 58, 169 | timestamps | time passes |
+| 89, 90 | event UUID bytes | jitter randomly in **both** phases |
+
+Decisive values:
+
+- **Field 2** (`kCGMouseEventPressure`) read exactly `1.0000` on all ten clicks,
+  normal and force alike. It saturates at 1.0 on an ordinary click and therefore
+  carries no force information whatsoever.
+- **Field 148 was identically zero**, along with every field in 145–155.
+- **Zero type-34 events** arrived, independently reproducing ADR 0001.
+
+**Conclusion.** No `CGEventField` distinguishes a Force Click from a normal
+click. The circulating claim is most plausibly derived from code operating on an
+**in-process `NSEvent`**, where pressure and stage do work — the original probe
+recorded 11 local pressure events reaching stage 2 — rather than on a tapped
+`CGEvent`. The suggested `getIntegerValueField` accessor is additionally wrong
+for a 0.0–1.0 value, which truncates to 0.
+
+ADR 0001's decision stands, now on exhaustive rather than targeted evidence.
+
+## Remaining route, and why it is not taken by default
+
+The user has authorised private API use. The only mechanism that could still
+work is reading the trackpad's raw pressure digitiser, either through
+`MultitouchSupport.framework` (`MTDeviceCreateList` /
+`MTRegisterContactFrameCallback`) or by parsing raw HID reports via the public
+`IOHIDManager`.
+
+Costs, recorded so the decision is not revisited from memory:
+
+- `MTTouch` struct layout is undocumented and has changed across macOS
+  releases. Getting it wrong yields garbage values or crashes **inside a
+  system callback**, taking the app down.
+- It reports per-contact pressure, not Force Touch *stages*, so the
+  click threshold would have to be invented and tuned per hardware generation.
+- Mac App Store distribution becomes permanently impossible, on top of the
+  existing App Sandbox blocker.
+- It is a reverse-engineering effort whose payoff over the existing global
+  hotkey is a gesture, not a capability.
+
+Deferred rather than rejected: revisit only once the product is otherwise
+complete, and behind a feature flag that degrades to the hotkey if the private
+framework fails to load.

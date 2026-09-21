@@ -15,7 +15,7 @@ import AppKit
 import ApplicationServices
 
 let selfPID = getpid()
-let scannedFields: [UInt32] = Array(145...155) + [2, 24]   // 2/24: documented-ish pressure
+let scannedFields: [UInt32] = Array(0...255)   // exhaustive: no assumption about which field carries pressure
 let logURL = URL(fileURLWithPath: "/Users/udhayxd/Projects/peek/Spike/PressureFieldProbe/probe.log")
 let startDate = Date()
 var textView: NSTextView?
@@ -50,6 +50,7 @@ var stats: [UInt32: FieldStats] = {
 }()
 
 var crossProcessMouseEvents = 0
+var clickIndex = 1
 var observedPIDs = Set<pid_t>()
 var tap: CFMachPort?
 
@@ -77,7 +78,23 @@ func sample(_ event: CGEvent, label: String, targetPID: pid_t) {
     }
 
     if !interesting.isEmpty {
-        log(">>> \(label) PRESSURE>1.0  \(interesting.joined(separator: " ")) target=pid \(targetPID)")
+        log(">>> \(label) VALUE>1.0  \(interesting.joined(separator: " ")) target=pid \(targetPID)")
+    }
+
+    // Dump the full non-zero field set for each mouse-DOWN. With a couple of
+    // dozen clicks this is short enough to read, and it is the only way to see
+    // whether a force click differs from a normal click in ANY field.
+    if label == "mouseDown" {
+        var nonZero: [String] = []
+        for field in scannedFields {
+            guard let cgField = CGEventField(rawValue: field) else { continue }
+            let d = event.getDoubleValueField(cgField)
+            if d != 0, d.isFinite {
+                nonZero.append("f\(field)=\(String(format: "%.4f", d))")
+            }
+        }
+        log("CLICK #\(clickIndex)  \(nonZero.joined(separator: " "))")
+        clickIndex += 1
     }
 }
 
@@ -156,11 +173,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGEvent.tapEnable(tap: created, enable: true)
         log("tap created @ session, listen-only")
         log("")
-        log("DO THIS in ANOTHER app (Notes/Finder — not this window):")
-        log("  1. A few NORMAL clicks.")
-        log("  2. A few hard FORCE CLICKS on a word.")
-        log("  3. Press and hold firmly, then release.")
-        log("Summary prints every 12s.")
+        log("DO THIS in ANOTHER app (Notes/Finder — NOT this window), in order:")
+        log("  PHASE A: exactly 5 NORMAL single clicks.")
+        log("  PHASE B: then 5 hard FORCE CLICKS on a word.")
+        log("Each click prints its full non-zero field set, numbered.")
+        log("So clicks 1-5 are normal and 6-10 are force clicks.")
         log("")
         Timer.scheduledTimer(withTimeInterval: 12, repeats: true) { _ in printSummary() }
     }
