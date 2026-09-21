@@ -36,6 +36,8 @@ public struct StreamAccumulator: Sendable, Equatable {
             responseID = id
         case .textDelta(let chunk):
             text += chunk
+        case .textSnapshot(let snapshot):
+            text = snapshot
         case .reasoningDelta(let chunk):
             reasoning += chunk
         case .toolCall(let call):

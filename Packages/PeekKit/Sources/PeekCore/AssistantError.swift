@@ -16,6 +16,12 @@ public enum AssistantError: Error, Equatable, Sendable {
     /// The provider replied with something the adapter could not decode.
     case invalidResponse(String)
     case network(String)
+    /// The provider exists but cannot run here — for an on-device model, the
+    /// hardware or an OS setting rather than anything the request can fix.
+    case providerUnavailable(String)
+    /// The request contains content this provider cannot accept, such as an
+    /// image for a text-only model.
+    case unsupportedContent(String)
     case cancelled
 
     /// Whether retrying the identical request could plausibly succeed.
@@ -25,7 +31,8 @@ public enum AssistantError: Error, Equatable, Sendable {
             return true
         case .serverError(let status, _):
             return status >= 500
-        case .missingCredentials, .unauthorized, .invalidResponse, .cancelled:
+        case .missingCredentials, .unauthorized, .invalidResponse,
+             .providerUnavailable, .unsupportedContent, .cancelled:
             return false
         }
     }
@@ -49,6 +56,10 @@ extension AssistantError: LocalizedError {
             return "Unexpected response from the provider: \(detail)"
         case .network(let detail):
             return "Network error: \(detail)"
+        case .providerUnavailable(let detail):
+            return detail
+        case .unsupportedContent(let detail):
+            return detail
         case .cancelled:
             return "Cancelled."
         }

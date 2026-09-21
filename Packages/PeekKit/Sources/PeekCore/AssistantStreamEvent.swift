@@ -13,8 +13,17 @@ import Foundation
 public enum AssistantStreamEvent: Sendable, Equatable {
     /// The provider accepted the request and a response is starting.
     case responseStarted(id: String?)
-    /// A chunk of user-visible assistant text.
+    /// A chunk of user-visible assistant text, appended to what came before.
     case textDelta(String)
+    /// The complete user-visible text so far, replacing anything prior.
+    ///
+    /// Not redundant with ``textDelta``: Apple's on-device Foundation Models
+    /// framework streams cumulative snapshots rather than increments, and a
+    /// snapshot may *revise* earlier text rather than only extend it. Diffing
+    /// snapshots into deltas would corrupt the transcript the moment a
+    /// revision arrived, so the vocabulary carries both shapes and the
+    /// accumulator handles each correctly.
+    case textSnapshot(String)
     /// A chunk of model reasoning, where the provider exposes it separately.
     case reasoningDelta(String)
     /// A tool invocation has been fully decoded. Reserved; not yet emitted.
