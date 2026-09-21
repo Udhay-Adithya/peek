@@ -199,9 +199,14 @@ final class AssistantSession {
                     try accumulator.apply(event)
 
                     // Only text moves the UI; reasoning and usage are folded
-                    // into the accumulator without a redraw per token.
-                    if case .textDelta = event {
+                    // into the accumulator without a redraw per token. Both
+                    // shapes matter: cloud providers stream deltas, the
+                    // on-device model streams snapshots.
+                    switch event {
+                    case .textDelta, .textSnapshot:
                         self?.updateStreamingText(id: streamID, to: accumulator.text)
+                    default:
+                        break
                     }
                 }
                 self?.completeStream(id: streamID, with: accumulator)

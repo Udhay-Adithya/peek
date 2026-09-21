@@ -29,10 +29,18 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.providerID = ProviderIdentifier(
-            rawValue: defaults.string(forKey: Key.providerID) ?? ProviderIdentifier.gemini.rawValue
-        )
-        self.modelID = defaults.string(forKey: Key.modelID) ?? GeminiProvider.defaultModelID
+        // Default to the on-device model where the Mac supports it: no key to
+        // configure, and nothing leaves the machine. Falls back to a cloud
+        // provider on hardware without Apple Intelligence.
+        let fallbackProvider = AppleIntelligenceProvider.systemAvailability() == nil
+            ? ProviderIdentifier.appleIntelligence
+            : ProviderIdentifier.gemini
+        let storedProvider = defaults.string(forKey: Key.providerID)
+        let resolvedProvider = ProviderIdentifier(rawValue: storedProvider ?? fallbackProvider.rawValue)
+        self.providerID = resolvedProvider
+
+        let fallbackModel = resolvedProvider == .appleIntelligence ? "system" : GeminiProvider.defaultModelID
+        self.modelID = defaults.string(forKey: Key.modelID) ?? fallbackModel
         self.autoSendOnInvoke = defaults.bool(forKey: Key.autoSend)
         // Defaults to on: without it, Electron and Gecko apps supply no
         // context at all, which is most browsers and most chat apps.

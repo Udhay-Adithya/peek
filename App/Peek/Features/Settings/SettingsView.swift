@@ -17,16 +17,36 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Provider") {
-                Picker("Provider", selection: $settings.providerID) {
-                    Text(provider.displayName).tag(ProviderIdentifier.gemini)
+                Picker("Provider", selection: Binding(
+                    get: { settings.providerID },
+                    set: { engine.selectProvider($0) }
+                )) {
+                    ForEach(engine.availableProviders, id: \.identifier) { candidate in
+                        Text(candidate.displayName).tag(candidate.identifier)
+                    }
                 }
+
                 Picker("Model", selection: $settings.modelID) {
                     ForEach(provider.models) { model in
                         Text(model.displayName).tag(model.id)
                     }
                 }
+                .disabled(provider.models.count <= 1)
+
+                if let reason = engine.unavailabilityReason {
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                if settings.providerID == .appleIntelligence {
+                    Text("Runs entirely on this Mac. Nothing you select or screenshot leaves the device, and no API key is needed. Text only — screenshots need a cloud provider.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
+            if provider.requiresAPIKey {
             Section("API Key") {
                 if let masked = engine.maskedKey(for: settings.providerID) {
                     LabeledContent("Stored key") {
@@ -70,6 +90,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+            }
             }
 
             Section("General") {
