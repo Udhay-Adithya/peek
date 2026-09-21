@@ -55,9 +55,17 @@ struct PanelRootView: View {
                 case .withheld(let appName):
                     NoteRow(icon: "hand.raised",
                             text: "Peek doesn't read from \(appName ?? "this app").")
-                case .empty, .captured, .none:
+                case .empty(let appName):
                     NoteRow(icon: "text.cursor",
-                            text: "Select text in another app to add context.")
+                            text: "Nothing selected in \(appName ?? "the previous app").")
+                case .captured:
+                    // Captured but dismissed by the user for this invocation.
+                    NoteRow(icon: "text.cursor", text: "Context removed.")
+                case .none:
+                    // Capture has not returned yet. Distinct from an empty
+                    // selection: conflating the two makes a failed query
+                    // indistinguishable from nothing being selected.
+                    NoteRow(icon: "ellipsis", text: "Reading selection\u{2026}")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
