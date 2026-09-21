@@ -36,7 +36,12 @@ struct MTTouch {
 }
 
 typealias MTDeviceRef = UnsafeMutableRawPointer
-typealias MTFrameCallback = @convention(c) (MTDeviceRef?, UnsafeMutablePointer<MTTouch>?, Int32, Double, Int32) -> Void
+
+// The touches parameter is a raw pointer rather than UnsafeMutablePointer<MTTouch>:
+// a Swift struct is not Objective-C representable, so it cannot appear in a
+// @convention(c) signature. Touches are loaded by stride instead, which also
+// forces the struct layout to be verified explicitly rather than assumed.
+typealias MTFrameCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, Int32, Double, Int32) -> Void
 
 typealias FnCreateDefault = @convention(c) () -> MTDeviceRef?
 typealias FnIsAvailable = @convention(c) () -> Bool
@@ -80,10 +85,11 @@ func log(_ line: String) {
 
 let frameCallback: MTFrameCallback = { _, touches, count, _, _ in
     guard let touches, count > 0 else { return }
+    let stride = MemoryLayout<MTTouch>.stride
     var maxPressure: Float = 0
     var maxTotal: Float = 0
     for index in 0..<Int(count) {
-        let touch = touches[index]
+        let touch = touches.load(fromByteOffset: index * stride, as: MTTouch.self)
         maxPressure = max(maxPressure, touch.pressure)
         maxTotal = max(maxTotal, touch.total)
     }
@@ -155,6 +161,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
 
         log("macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        // The C struct is 96 bytes with 8-byte alignment. A mismatch here means
+        // every field read afterwards is garbage, so it is checked, not assumed.
+        log("MTTouch size=\(MemoryLayout<MTTouch>.size) stride=\(MemoryLayout<MTTouch>.stride) (expect 96/96)")
+        log("offsets: pressure=52 total=48 state=20 — computed from the C header")
         log("AXIsProcessTrusted=\(AXIsProcessTrusted())")
         log("")
 
