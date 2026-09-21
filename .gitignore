@@ -32,3 +32,4 @@ Spike/**/probe.log
 
 # Local diagnostics
 .capture-diagnostics.log
+Spike/**/PressureFieldProbe.app/
