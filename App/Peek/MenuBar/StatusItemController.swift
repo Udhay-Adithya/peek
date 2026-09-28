@@ -14,6 +14,8 @@ final class StatusItemController {
     private let onOpenWindow: () -> Void
     private let onQuit: () -> Void
     private let menu: NSMenu
+    private var twinkleTimer: Timer?
+    private var twinkleFrame = 0
 
     /// Whether the global shortcut is actually live.
     enum HotKeyStatus {
@@ -25,7 +27,7 @@ final class StatusItemController {
         didSet { buildMenu() }
     }
 
-    /// Reflects in-flight assistant work. Set from the streaming layer later.
+    /// Reflects in-flight assistant work: the glyph's stars twinkle while true.
     var isBusy: Bool = false {
         didSet { guard isBusy != oldValue else { return }; updateAppearance() }
     }
@@ -92,17 +94,38 @@ final class StatusItemController {
 
     private func updateAppearance() {
         guard let button = statusItem.button else { return }
-        let symbol = isBusy ? "sparkles" : "text.magnifyingglass"
-        button.image = Self.symbolImage(named: symbol, fallback: "magnifyingglass")
-        button.image?.isTemplate = true
         button.toolTip = isBusy ? "Peek — thinking…" : "Peek"
+
+        // Reduce Motion keeps the busy state static; the tooltip still says so.
+        if isBusy && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            startTwinkling()
+        } else {
+            stopTwinkling()
+            button.image = StatusGlyph.idle
+        }
     }
 
-    /// SF Symbol availability varies by OS version; fall back rather than
-    /// shipping a status item with no image at all.
-    private static func symbolImage(named name: String, fallback: String) -> NSImage? {
-        NSImage(systemSymbolName: name, accessibilityDescription: "Peek")
-            ?? NSImage(systemSymbolName: fallback, accessibilityDescription: "Peek")
+    private func startTwinkling() {
+        guard twinkleTimer == nil else { return }
+        twinkleFrame = 0
+        statusItem.button?.image = StatusGlyph.busyFrames[0]
+
+        let timer = Timer(timeInterval: StatusGlyph.frameInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.advanceTwinkle() }
+        }
+        // Common modes, so the stars keep moving while the status menu is open.
+        RunLoop.main.add(timer, forMode: .common)
+        twinkleTimer = timer
+    }
+
+    private func advanceTwinkle() {
+        twinkleFrame = (twinkleFrame + 1) % StatusGlyph.busyFrames.count
+        statusItem.button?.image = StatusGlyph.busyFrames[twinkleFrame]
+    }
+
+    private func stopTwinkling() {
+        twinkleTimer?.invalidate()
+        twinkleTimer = nil
     }
 
     @objc private func handleClick() {
