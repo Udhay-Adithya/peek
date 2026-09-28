@@ -13,17 +13,20 @@
 #      and Security → App-Specific Passwords.
 #   3. Store notarization credentials once:
 #        xcrun notarytool store-credentials peek \
-#          --apple-id "udhayxd@gmail.com" \
-#          --team-id 5ZN86R9K96 \
+#          --apple-id "<your-apple-id>" \
+#          --team-id "<your-team-id>" \
 #          --password "<app-specific-password>"
 #
-# Then: ./scripts/release.sh
+# Then: TEAM_ID=<your-team-id> ./scripts/release.sh
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TEAM_ID="5ZN86R9K96"
-NOTARY_PROFILE="peek"
+# Taken from the environment so no maintainer's identity is baked into a public
+# repository. TEAM_ID is the parenthesised code in the certificate name that
+# `security find-identity -v -p codesigning` prints.
+TEAM_ID="${TEAM_ID:-}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-peek}"
 BUILD_DIR="build/release"
 ARCHIVE="$BUILD_DIR/Peek.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
@@ -34,6 +37,19 @@ fail() { printf '\n\033[31merror: %s\033[0m\n' "$1" >&2; exit 1; }
 
 # --- Preflight -------------------------------------------------------------
 say "Preflight"
+
+if [ -z "$TEAM_ID" ]; then
+  DETECTED=$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*Developer ID Application: .*(\([A-Z0-9]*\)).*/\1/p' | head -1)
+  if [ -n "$DETECTED" ]; then
+    TEAM_ID="$DETECTED"
+    echo "team: $TEAM_ID (detected from the signing certificate)"
+  else
+    fail "TEAM_ID is not set and no Developer ID certificate was found.
+
+Set it explicitly:  TEAM_ID=XXXXXXXXXX ./scripts/release.sh"
+  fi
+fi
 
 if ! security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
   fail "No 'Developer ID Application' certificate found.
@@ -51,7 +67,7 @@ if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>
   fail "Notarization profile '$NOTARY_PROFILE' not found. Run:
 
   xcrun notarytool store-credentials $NOTARY_PROFILE \\
-    --apple-id \"udhayxd@gmail.com\" --team-id $TEAM_ID --password \"<app-specific-password>\""
+    --apple-id \"<your-apple-id>\" --team-id $TEAM_ID --password \"<app-specific-password>\""
 fi
 
 command -v xcodegen >/dev/null || fail "xcodegen not installed (brew install xcodegen)"

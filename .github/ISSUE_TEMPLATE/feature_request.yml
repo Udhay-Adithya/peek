@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest something Peek should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The situation, rather than the solution. Peek is a replacement for the
+        Look Up moment, so "I wanted to know X about something on screen and
+        could not" is the most useful shape.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does this fit how Peek works?
+      description: >
+        Not a gate — just worth thinking about, since these constraints have
+        shaped most of the app so far.
+      options:
+        - label: It works without sending anything off the machine, or is optional if it does not
+        - label: It does not require a permission at launch, only at the point of use
+        - label: It can be achieved with public APIs (see ADR 0001 for when it cannot)

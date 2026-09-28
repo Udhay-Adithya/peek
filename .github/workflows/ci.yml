@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # A newer push supersedes an in-flight run. macOS runners are billed at ten
+  # times the rate of Linux, so queued duplicates are worth cancelling.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core tests
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: Packages/PeekKit/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('Packages/PeekKit/Package.swift') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # Runs without an app bundle, which is the point of the PeekKit boundary.
+      - name: Test PeekKit
+        working-directory: Packages/PeekKit
+        run: swift test
+
+  app:
+    name: App tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      # CI has no signing identity, so the app is built unsigned. The release
+      # script is what verifies signing and hardened runtime.
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project Peek.xcodeproj \
+            -scheme Peek \
+            -destination "platform=macOS" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            | xcbeautify --renderer github-actions
+        env:
+          NSUnbufferedIO: YES
+
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # PeekKit's whole value is that it is testable without a UI framework.
+      # A stray import would compile fine and quietly cost that.
+      - name: PeekKit must not import AppKit or SwiftUI
+        run: |
+          if grep -rn --include='*.swift' -E '^import (AppKit|SwiftUI)' Packages/PeekKit/Sources; then
+            echo "::error::PeekKit must stay free of UI frameworks — move this into App/Peek"
+            exit 1
+          fi
+          echo "clean"
+
+      - name: No key material committed
+        run: |
+          if git ls-files | grep -iE 'private_key|\.p12$|\.cer$|\.provisionprofile$'; then
+            echo "::error::key material must never be committed"
+            exit 1
+          fi
+          if git grep -nE 'BEGIN (RSA|EC|OPENSSH|PRIVATE)|AIza[0-9A-Za-z_-]{30}|sk-[A-Za-z0-9]{20}' -- . ; then
+            echo "::error::a credential-shaped string is present in tracked files"
+            exit 1
+          fi
+          echo "clean"
+
+      - name: Changelog updated
+        if: github.event_name == 'pull_request'
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^CHANGELOG.md$'; then
+            echo "changelog updated"
+            exit 0
+          fi
+          # Docs, tests and CI changes are not user-visible and need no entry.
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep -vE '^(docs/|Tests/|\.github/|README\.md|CONTRIBUTING\.md|Spike/)' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "no user-visible changes; changelog entry not required"
+            exit 0
+          fi
+          echo "::warning::This PR changes shipped code but does not update CHANGELOG.md"

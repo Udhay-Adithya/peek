@@ -1,17 +1,110 @@
 # Peek
 
-An AI assistant for macOS that appears where you're reading. Select text
-anywhere, press a key, and ask about it — a floating panel opens next to the
-pointer with the selection already supplied as context.
+**A better Look Up for macOS.**
 
-Native Swift throughout: SwiftUI, AppKit, Swift Concurrency, SwiftData,
-ScreenCaptureKit, Keychain Services. No third-party runtime dependencies.
+Force Click a word on macOS and you get a dictionary definition, a Wikipedia
+stub and a handful of data detectors. The gesture is in exactly the right place —
+it is the moment you stop and wonder about something — and it answers almost
+nothing you actually wanted to know.
 
-## Requirements
+Peek takes that moment and answers properly. Select anything, invoke it, and a
+panel opens beside the pointer with your selection already in context. Ask what
+it means, what the code does, how to say it in another language, what the error
+is telling you. Then ask a follow-up, because unlike Look Up this is a
+conversation.
 
-- macOS 26.0 or later
-- Xcode 26.3+ / Swift 6.2
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (build-time only, not shipped)
+It runs on Apple Intelligence **on your Mac by default** — no API key, nothing
+leaves the machine — and can use a cloud provider when you want a larger model.
+
+## How it compares
+
+| | macOS Look Up | Peek |
+|---|---|---|
+| Answers | dictionary, thesaurus, a few detectors | anything you can ask |
+| Follow-ups | none | a full conversation |
+| Works in | apps that expose text to the system | the same, plus a clipboard fallback for Electron and Firefox-based apps |
+| Screenshots | no | attach a region or the whole screen |
+| History | none | searchable and persistent |
+| Invoked by | Force Click | Force Click, a global shortcut, the Services menu, or the menu bar |
+
+## Install
+
+Download the latest notarized DMG from
+[Releases](https://github.com/Udhay-Adithya/peek/releases/latest) and drag Peek
+to Applications. It updates itself from there.
+
+Peek lives in the menu bar and stays out of the way. Requires macOS 26 or later.
+
+### Replacing Look Up
+
+Peek can use the same Force Click gesture Look Up uses. Turn Peek's Force Click
+trigger on in Settings, then switch the system's own off in
+**System Settings → Trackpad → Point & Click → Look up & data detectors → Off**,
+or both will open at once. macOS exposes no way for an app to do this for you.
+
+Prefer to keep Look Up? Leave Force Click off and use `⌃⌥Space`.
+
+## How it works
+
+### Invoking it
+
+| Trigger | Permission | Notes |
+|---|---|---|
+| `⌃⌥Space` | none | Works on any Mac, with any input device |
+| "Ask Peek" in the Services menu | none | Appears in most apps; bindable to your own shortcut |
+| Menu bar | none | Left click opens, right click for the menu |
+| **Force Click** | Accessibility | Off by default — see [ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) |
+
+Force Click is not reachable through any public macOS API, which
+[ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) establishes
+by measurement rather than assertion. Peek reads raw trackpad pressure through a
+private framework, resolved at runtime so that a future macOS release disables
+the trigger rather than the app.
+
+### Reading your selection
+
+1. **Accessibility** — instant, no side effects, and it yields the selection's
+   on-screen position.
+2. **Chromium and Gecko priming** — Electron apps expose nothing until asked,
+   then build their accessibility tree asynchronously, so Peek primes and
+   retries.
+3. **Clipboard fallback** — a synthetic copy sent to the source app, with your
+   clipboard snapshotted and restored afterwards. Optional, and never used in
+   password managers.
+
+Peek never reads from a deny-listed app, and never from a secure text field.
+
+## Privacy
+
+- **On-device by default.** Apple Intelligence runs locally; nothing is sent
+  anywhere unless you choose a cloud provider.
+- **API keys live in the Keychain** — never in preferences, never on disk in
+  plain text, never in logs. Settings only ever shows a masked value.
+- **No telemetry.** Selected text and screenshots go to the provider you
+  configured and nowhere else.
+- **Diagnostics are redacted by construction** — outcomes, byte counts and
+  accessibility roles are recorded; conversation content, selections and images
+  are not.
+- Conversations are stored unencrypted at
+  `~/Library/Application Support/Peek/Conversations.store`. Deleting that file
+  removes all history.
+- On Google's free Gemini tier, prompts may be used to improve their products.
+  Settings says so beside the key field.
+
+## Keyboard
+
+| Key | Action |
+|---|---|
+| `⌃⌥Space` | Show / hide the panel |
+| `Esc` | Dismiss |
+| `↩` | Send |
+| `⇧↩` | New line |
+| `⌘N` | New conversation |
+| `⌘K` | Conversation history |
+| `⌘⇧O` | Open in the main window |
+| `⌘.` | Stop streaming |
+| `⌘,` | Settings |
+| `⌘Q` | Hide to the menu bar |
 
 ## Building
 
@@ -21,52 +114,19 @@ xcodegen generate
 xcodebuild -project Peek.xcodeproj -scheme Peek -configuration Debug build
 ```
 
-Core tests run without building the app bundle:
+Requires macOS 26 and Xcode 26.3 or later.
+
+Core tests run in seconds, without building an app bundle:
 
 ```bash
 cd Packages/PeekKit && swift test
 ```
 
-App-layer tests (session, capture cascade, continuation policy):
+App-layer tests:
 
 ```bash
 xcodebuild test -project Peek.xcodeproj -scheme Peek -destination "platform=macOS"
 ```
-
-Performance baseline — see [docs/performance.md](docs/performance.md):
-
-```bash
-PEEK_BENCHMARK=1 <built>/Peek.app/Contents/MacOS/Peek
-```
-
-## How it's invoked
-
-Force Click **is** supported, but not through any public API — no public
-mechanism exposes it, which
-[ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) establishes
-by measurement. It works by reading raw trackpad pressure through a private
-framework, resolved with `dlsym` so a future macOS disables the trigger rather
-than the app. It is **off by default**.
-
-| Trigger | Permission | Notes |
-|---|---|---|
-| `⌃⌥Space` global hotkey | none | `RegisterEventHotKey`; works on any input device |
-| "Ask Peek" in the Services menu | none | macOS supplies the selection on the pasteboard |
-| Menu bar item | none | Left click toggles, right click opens the menu |
-| **Force Click** | Accessibility | Off by default; reads pressure via a private framework, see ADR 0001 |
-
-## How context is captured
-
-1. **Accessibility** (`kAXSelectedTextAttribute`) — instant, no side effects,
-   and also yields the selection's on-screen bounds.
-2. **Chromium/Gecko priming** — Electron apps expose nothing until
-   `AXManualAccessibility` is set, then build their tree asynchronously, so
-   Peek primes and retries once.
-3. **Clipboard fallback** — a synthetic ⌘C sent to the source process with
-   `postToPid`, with the pasteboard snapshotted and restored. Opt-out in
-   settings, refused under Secure Input, and never used in password managers.
-
-Peek never reads from a deny-listed app, and never from a secure text field.
 
 ## Architecture
 
@@ -76,7 +136,7 @@ Packages/PeekKit/          pure Swift, no AppKit — the testable core
                            capture policy, panel geometry, image budget,
                            force-click detection
   PeekProviders            provider protocol, SSE parsing, transport seam,
-                           Gemini adapter, retry policy
+                           Gemini and Apple Intelligence adapters, retry policy
   PeekPersistence          SwiftData conversation store behind a protocol
   PeekSecurity             Keychain credential storage, secret masking
 
@@ -85,61 +145,31 @@ App/Peek/                  AppKit + SwiftUI
   MenuBar/                 status item and activity indicator
   Panel/                   NSPanel subclass, placement, pre-warming
   Window/                  the expanded conversation window
-  Triggers/                hotkey, Services provider
+  Triggers/                hotkey, Services provider, Force Click
   Capture/                 Accessibility, clipboard, ScreenCaptureKit
   Settings/                preferences, login item
+  Updates/                 Sparkle integration
   Diagnostics/             benchmark harness
   Features/                SwiftUI views
 
-Tests/PeekTests/           app-layer tests (session, capture cascade)
+Tests/PeekTests/           app-layer tests
 ```
 
-Two rules hold the design together:
+Two rules hold the design together. **Nothing in `PeekKit` imports AppKit or
+SwiftUI**, which is what lets the core suite run in milliseconds without an app
+bundle — enforced by the module boundary rather than by discipline. And **every
+provider speaks one normalised event vocabulary**, so the UI, persistence layer
+and tests never learn a vendor's wire format. Adapters are tested against
+recorded fixtures, including a real captured Gemini stream.
 
-**Nothing in `PeekKit` imports AppKit or SwiftUI.** That's what lets `swift test`
-run the whole core in milliseconds without an app bundle, and it's enforced by
-the module boundary rather than by discipline.
+## Contributing
 
-**Providers speak one normalised event vocabulary.** Each adapter translates its
-own SSE dialect into `AssistantStreamEvent`; the UI, persistence layer and tests
-know only that enum. Adapters are tested against recorded fixtures — including a
-real captured Gemini stream — with no network.
-
-## Privacy
-
-- API keys live in the Keychain. Never in `UserDefaults`, never on disk in
-  plain text, never in logs. Settings only ever displays a masked value.
-- Selected text and screenshots go to the provider you configured and nowhere
-  else. There is no telemetry.
-- Diagnostics are redacted by construction: outcomes, byte counts, AX roles and
-  token counts are logged; conversation content, selections and images are not.
-- Conversations are stored unencrypted in
-  `~/Library/Application Support/Peek/Conversations.store`. Deleting that file
-  removes all history.
-- On Google's free Gemini tier, prompts may be used to improve their products.
-  Settings says so next to the key field.
-
-## Keyboard
-
-| Key | Action |
-|---|---|
-| `⌃⌥Space` | Show / hide the panel |
-| `Esc` | Dismiss |
-| `↩` | Send |
-| `⌘N` | New conversation |
-| `⌘K` | Conversation history |
-| `⌘⇧O` | Expand into the window |
-| `⌘.` | Stop streaming |
-| `⌘,` | Settings |
-| `⌘W` | Hide the panel |
-
-## Distribution
-
-Developer ID + hardened runtime + notarized, outside the Mac App Store. The
-sandbox blocks cross-process Accessibility with no entitlement to lift it —
-see [ADR 0002](docs/adr/0002-developer-id-not-app-store.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Changes are recorded in
+[CHANGELOG.md](CHANGELOG.md), following
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Decision records
 
 - [ADR 0001 — Force Click cannot be detected globally](docs/adr/0001-force-click-cannot-be-detected-globally.md)
 - [ADR 0002 — Developer ID, not the App Store](docs/adr/0002-developer-id-not-app-store.md)
+- [Performance baseline](docs/performance.md)
