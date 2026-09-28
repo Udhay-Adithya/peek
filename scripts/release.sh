@@ -56,6 +56,34 @@ fi
 
 command -v xcodegen >/dev/null || fail "xcodegen not installed (brew install xcodegen)"
 
+# Version guard. Sparkle decides whether an update is newer by comparing
+# CURRENT_PROJECT_VERSION (it appears in the appcast as <sparkle:version>), not
+# the marketing string. Shipping two releases with the same build number means
+# no installed copy ever sees the second one — a silent failure that only
+# surfaces as "nobody is updating", so it is checked before anything is built.
+MARKETING=$(awk -F'"' '/MARKETING_VERSION:/{print $2}' project.yml | head -1)
+BUILD=$(awk -F'"' '/CURRENT_PROJECT_VERSION:/{print $2}' project.yml | head -1)
+[ -n "$MARKETING" ] || fail "could not read MARKETING_VERSION from project.yml"
+[ -n "$BUILD" ] || fail "could not read CURRENT_PROJECT_VERSION from project.yml"
+
+echo "version: $MARKETING (build $BUILD)"
+
+if git rev-parse "v$MARKETING" >/dev/null 2>&1; then
+  fail "Tag v$MARKETING already exists — bump MARKETING_VERSION in project.yml."
+fi
+
+LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+if [ -n "$LAST_TAG" ]; then
+  LAST_BUILD=$(git show "$LAST_TAG:project.yml" 2>/dev/null \
+    | awk -F'"' '/CURRENT_PROJECT_VERSION:/{print $2}' | head -1)
+  if [ -n "$LAST_BUILD" ] && [ "$BUILD" -le "$LAST_BUILD" ] 2>/dev/null; then
+    fail "CURRENT_PROJECT_VERSION is $BUILD but $LAST_TAG already shipped $LAST_BUILD.
+
+Sparkle would not treat this build as newer, so nobody would be offered the
+update. Increment CURRENT_PROJECT_VERSION in project.yml."
+  fi
+fi
+
 # --- Tests must pass before anything ships --------------------------------
 say "Running tests"
 (cd Packages/PeekKit && swift test)

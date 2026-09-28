@@ -56,7 +56,15 @@ Confirm the repository path matches yours before the first release.
 
 ## Each release
 
-1. Bump `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION`) in `project.yml`.
+1. Bump **both** `MARKETING_VERSION` **and** `CURRENT_PROJECT_VERSION` in
+   `project.yml`.
+
+   `CURRENT_PROJECT_VERSION` is the one that matters mechanically: it becomes
+   `<sparkle:version>` in the appcast, and Sparkle decides whether an update is
+   newer by comparing it — not the marketing string. Two releases sharing a
+   build number means no installed copy is ever offered the second one. The
+   release script refuses to run if the build number has not increased since
+   the last tag, and if a tag for this marketing version already exists.
 2. Run:
 
 ```bash
@@ -68,7 +76,19 @@ signature and hardened runtime *before* spending a notarization round trip,
 builds a signed DMG, notarizes, staples, checks Gatekeeper, and generates a
 signed `appcast.xml`.
 
-3. Create the GitHub release and upload **both** the DMG and `appcast.xml`.
+3. Tag, then create the GitHub release with **both** the DMG and `appcast.xml`:
+
+```bash
+git tag v0.1.0 && git push origin main --tags
+gh release create v0.1.0 \
+  build/release/Peek-0.1.0.dmg \
+  build/release/appcast.xml \
+  --title "Peek 0.1.0" --notes "First release."
+```
+
+Both files must be attached to the **same** release, because `SUFeedURL` points
+at `releases/latest/download/appcast.xml` and the appcast's enclosure URL
+points at `releases/latest/download/Peek-<version>.dmg`.
 
 Existing installs pick the update up from the feed. `SUPublicEDKey` must not
 change between releases, or they will reject it.
