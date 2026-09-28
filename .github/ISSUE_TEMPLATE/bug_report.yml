@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Peek does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste API keys, or the contents of a selection or
+        screenshot that contains anything private. Peek's own diagnostics are
+        redacted for the same reason.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select text in …
+        2. Press ⌃⌥Space
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: source-app
+    attributes:
+      label: Which app were you selecting text in?
+      description: >
+        Coverage varies sharply between native AppKit, Electron and
+        Firefox-based apps, so this is often the whole answer.
+      placeholder: Notes, Obsidian, Zen, Ghostty…
+
+  - type: dropdown
+    id: trigger
+    attributes:
+      label: How did you invoke Peek?
+      options:
+        - ⌃⌥Space
+        - Force Click
+        - Services menu ("Ask Peek")
+        - Menu bar
+        - Not applicable
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which provider was selected?
+      options:
+        - Apple Intelligence (on-device)
+        - Google Gemini
+        - Not applicable
+
+  - type: input
+    id: versions
+    attributes:
+      label: Peek and macOS versions
+      placeholder: Peek 0.1.0, macOS 26.3.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      description: >
+        Peek logs redacted diagnostics — outcomes, byte counts and
+        accessibility roles, never your content. Collect them with:
+        `log show --last 10m --predicate 'subsystem == "com.udhayadithya.Peek"' --info --debug`
+      render: text
