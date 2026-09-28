@@ -50,14 +50,19 @@
 			</array>
 		</dict>
 	</array>
-	<!-- Sparkle. Replace SUPublicEDKey with the public half printed by
-	     Sparkle's generate_keys tool, and SUFeedURL with the appcast hosted on
-	     GitHub Releases. Until both are set, Peek reports updates as
-	     unavailable rather than checking a feed that does not exist. -->
+	<!-- Sparkle. SUPublicEDKey is the PUBLIC half of the update signing key
+	     and belongs in version control: it is what lets an installed copy of
+	     Peek reject any build not signed with the matching private key, even
+	     if GitHub Releases were compromised. The private half lives only in
+	     the release machine's login keychain.
+
+	     This value must never change between releases — existing installs
+	     verify against the key they shipped with and would reject updates
+	     signed by a different one. -->
 	<key>SUFeedURL</key>
 	<string>https://github.com/Udhay-Adithya/peek/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_SPARKLE_PUBLIC_KEY</string>
+	<string>obgL2g2+cxZpEqjr4lArI43ixIKGvpkcHSC/1Y33ols=</string>
 	<key>SUEnableInstallerLauncherService</key>
 	<false/>
 	<key>NSHumanReadableCopyright</key>

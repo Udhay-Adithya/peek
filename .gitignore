@@ -34,3 +34,10 @@ Spike/**/probe.log
 .capture-diagnostics.log
 Spike/**/PressureFieldProbe.app/
 Spike/**/PressureThresholdProbe.app/
+
+# Sparkle private signing key — must never be committed.
+# Losing it makes every install un-updatable; leaking it lets someone else
+# ship a signed build your users will accept.
+sparkle_private_key.txt
+*_private_key.txt
+*.priv
