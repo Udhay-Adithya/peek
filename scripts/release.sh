@@ -104,14 +104,36 @@ xcodebuild -exportArchive \
 # --- Verify signing before spending a notarization round trip -------------
 say "Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -dv --verbose=4 "$APP" 2>&1 | grep -E "Authority|flags|TeamIdentifier"
 
-codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "app-sandbox" \
-  && echo "note: entitlements declare app-sandbox=false, as intended"
+# Captured once into a variable rather than piped into grep. `grep -q` exits at
+# its first match, which kills codesign mid-write with SIGPIPE; under
+# `pipefail` that surfaces as a pipeline failure even though the match
+# succeeded. It is a race on output buffering, so it fails intermittently —
+# which is exactly how it was found. `case` avoids pipes altogether.
+SIGNATURE_INFO=$(codesign -dv --verbose=4 "$APP" 2>&1 || true)
+printf '%s\n' "$SIGNATURE_INFO" | grep -E "Authority|flags|TeamIdentifier" || true
+
+ENTITLEMENTS=$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)
+case "$ENTITLEMENTS" in
+  *app-sandbox*) echo "note: entitlements declare app-sandbox=false, as intended" ;;
+esac
 
 # Hardened runtime is mandatory for notarization.
-codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "flags=.*runtime" \
-  || fail "Hardened runtime is not enabled; notarization will be rejected"
+case "$SIGNATURE_INFO" in
+  *"flags="*runtime*) echo "hardened runtime: enabled" ;;
+  *) fail "Hardened runtime is not enabled; notarization will be rejected" ;;
+esac
+
+# An Apple Development signature builds and runs locally but can never be
+# notarized, and the failure otherwise appears much later as an opaque
+# rejection.
+case "$SIGNATURE_INFO" in
+  *"Developer ID Application"*) echo "signing identity: Developer ID" ;;
+  *) fail "Not signed with a Developer ID Application certificate.
+
+Signed with:
+$(printf '%s\n' "$SIGNATURE_INFO" | grep Authority || echo '  (unknown)')" ;;
+esac
 
 # --- Package --------------------------------------------------------------
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")

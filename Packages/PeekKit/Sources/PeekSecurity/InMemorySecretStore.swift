@@ -22,6 +22,8 @@ public final class InMemorySecretStore: SecretStore, @unchecked Sendable {
     }
 
     public func remove(_ key: SecretKey) throws {
-        lock.withLock { storage.removeValue(forKey: key) }
+        // The removed value is discarded deliberately; `remove` is idempotent
+        // and reports nothing about whether the key existed.
+        _ = lock.withLock { storage.removeValue(forKey: key) }
     }
 }
