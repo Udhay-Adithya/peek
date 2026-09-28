@@ -5,10 +5,7 @@ import SwiftUI
 ///
 /// An `NSTextView` rather than SwiftUI's `TextField`, because SwiftUI's
 /// `onSubmit` carries no modifier information — so Return and Shift-Return are
-/// indistinguishable and both send. AppKit already separates them at the
-/// responder level: Return maps to `insertNewline(_:)` and Shift-Return to
-/// `insertNewlineIgnoringFieldEditor(_:)`, which is exactly the distinction a
-/// chat composer needs.
+/// indistinguishable there and both send.
 ///
 /// Wrapping AppKit also restores standard editing behaviour for free — undo,
 /// spell checking, and the system's own text navigation bindings.
@@ -106,20 +103,53 @@ struct PromptEditor: NSViewRepresentable {
 }
 
 /// `NSTextView` that sends on Return and inserts a newline on Shift-Return.
+///
+/// The modifier is inspected in `keyDown` rather than relying on the responder
+/// action, because macOS does **not** bind Shift-Return to anything distinct:
+/// `StandardKeyBinding.dict` maps `insertNewlineIgnoringFieldEditor:` to
+/// Option-Return and Control-O only, and Shift is ignored for Return. Both
+/// therefore arrive as plain `insertNewline:`, and a composer that wants them
+/// to differ has to read the event itself.
 final class SubmittingTextView: NSTextView {
 
     var onSubmit: (() -> Void)?
+
+    private enum Key {
+        static let `return`: UInt16 = 36
+        static let keypadEnter: UInt16 = 76
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard event.keyCode == Key.return || event.keyCode == Key.keypadEnter else {
+            super.keyDown(with: event)
+            return
+        }
+
+        // Shift or Option inserts a line break; plain Return sends. Option is
+        // included because that is the system's own newline modifier, so users
+        // who know it will reach for it.
+        let wantsNewline = event.modifierFlags.contains(.shift)
+            || event.modifierFlags.contains(.option)
+
+        if wantsNewline {
+            insertNewlineIgnoringFieldEditor(self)
+        } else {
+            onSubmit?()
+        }
+    }
 
     var placeholderString: String? {
         didSet { needsDisplay = true }
     }
 
-    /// Return. AppKit routes Shift-Return elsewhere, so this is unambiguous.
+    /// Backstop for any path that reaches the action without going through
+    /// `keyDown`, such as a menu or scripted invocation.
     override func insertNewline(_ sender: Any?) {
         onSubmit?()
     }
 
-    /// Shift-Return, and Option-Return.
+    /// The actual line break. Calls `super.insertNewline` deliberately —
+    /// this type's own `insertNewline` submits.
     override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
         super.insertNewline(sender)
     }
