@@ -67,7 +67,7 @@ if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>
   fail "Notarization profile '$NOTARY_PROFILE' not found. Run:
 
   xcrun notarytool store-credentials $NOTARY_PROFILE \\
-    --apple-id \"udhayxd@gmail.com\" --team-id $TEAM_ID --password \"<app-specific-password>\""
+    --apple-id \"<your-apple-id>\" --team-id $TEAM_ID --password \"<app-specific-password>\""
 fi
 
 command -v xcodegen >/dev/null || fail "xcodegen not installed (brew install xcodegen)"

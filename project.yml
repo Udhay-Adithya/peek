@@ -11,6 +11,11 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    # The team that publishes the notarized releases. Not a secret: a team ID
+    # is embedded in every signed binary and readable with `codesign -dv` on
+    # any published build. Contributors signing locally should override it in
+    # a personal xcconfig rather than changing it here — leaving it unset
+    # makes the app ad-hoc signed, which silently breaks notarization.
     DEVELOPMENT_TEAM: 5ZN86R9K96
     CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: YES
