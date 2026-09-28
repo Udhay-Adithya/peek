@@ -263,3 +263,98 @@ struct PanelViewModelTests {
         #expect(model.session.isEmpty)
     }
 }
+
+@Suite("PanelViewModel screen reading")
+@MainActor
+struct PanelViewModelScreenReadingTests {
+
+    private func makeModel(accessibility: SelectionOutcome,
+                           clipboard: SelectionOutcome) -> PanelViewModel {
+        let settings = makeTestSettings()
+        settings.clipboardFallbackEnabled = true
+        settings.continueRecentConversation = false
+        settings.autoSendOnInvoke = false
+
+        let store = RecordingStore()
+        let engine = StubEngine(provider: StubProvider(events: [], failure: nil, recorder: nil))
+        return PanelViewModel(
+            settings: settings,
+            engine: engine,
+            store: store,
+            session: AssistantSession(engine: engine, store: store),
+            history: HistoryViewModel(store: store),
+            capture: StubSelectionCapture(outcome: accessibility),
+            clipboardCapture: StubClipboardCapture(outcome: clipboard)
+        )
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<200 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test("offers to read the screen only when the app exposes nothing")
+    func offersOnlyWhenUnsupported() async {
+        let model = makeModel(accessibility: .unsupported(appName: "Preview"),
+                              clipboard: .empty(appName: "Preview"))
+        model.refreshContext(frontApp: .stub(name: "Preview"))
+        await waitUntil { model.selection != nil }
+        #expect(model.canReadFromScreen)
+    }
+
+    @Test("does not offer after an empty selection")
+    func noOfferWhenSelectionEmpty() async {
+        // The app supports selections and had none. Reading the screen would
+        // capture something the user did not select.
+        let model = makeModel(accessibility: .empty(appName: "Notes"),
+                              clipboard: .empty(appName: "Notes"))
+        model.refreshContext(frontApp: .stub())
+        await waitUntil { model.selection != nil }
+        #expect(model.canReadFromScreen == false)
+    }
+
+    @Test("does not offer for a withheld app")
+    func noOfferWhenWithheld() async {
+        // Offering OCR here would invite screenshotting a password manager.
+        let model = makeModel(accessibility: .withheld(appName: "1Password"),
+                              clipboard: .empty(appName: "1Password"))
+        model.refreshContext(frontApp: .stub(name: "1Password",
+                                             bundleID: "com.1password.1password"))
+        await waitUntil { model.selection != nil }
+        #expect(model.canReadFromScreen == false)
+    }
+
+    @Test("does not offer when the permission is the problem")
+    func noOfferWhenPermissionMissing() async {
+        let model = makeModel(accessibility: .permissionRequired,
+                              clipboard: .empty(appName: nil))
+        model.refreshContext(frontApp: .stub())
+        await waitUntil { model.selection != nil }
+        #expect(model.canReadFromScreen == false)
+    }
+
+    @Test("a successful capture leaves nothing to read")
+    func noOfferWhenCaptured() async {
+        let model = makeModel(
+            accessibility: .captured(SelectionContext(text: "obtund", sourceAppName: "Notes")),
+            clipboard: .empty(appName: "Notes")
+        )
+        model.refreshContext(frontApp: .stub())
+        await waitUntil { model.activeContext != nil }
+        #expect(model.canReadFromScreen == false)
+    }
+
+    @Test("a new invocation clears the screen-reading state")
+    func invocationResetsState() async {
+        let model = makeModel(accessibility: .unsupported(appName: "Preview"),
+                              clipboard: .empty(appName: "Preview"))
+        model.refreshContext(frontApp: .stub(name: "Preview"))
+        await waitUntil { model.selection != nil }
+
+        model.prepareForInvocation()
+        #expect(model.recognizedFromScreen == false)
+        #expect(model.recognitionError == nil)
+    }
+}

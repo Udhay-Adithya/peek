@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
+### Added
+
+- **Read text from the screen.** When an app exposes no selection — PDFs,
+  images, video frames, canvas-drawn apps, remote desktops — Peek now offers to
+  read it from the screen instead. Drag over the part you mean and the text is
+  recognised locally with Vision. Nothing leaves your Mac, and it needs no
+  permission beyond the Screen Recording grant screenshots already use.
+- Context captured this way is labelled **read from screen** in the panel, so
+  it is clear whether you are looking at the app's own text or Peek's reading
+  of the pixels.
+
+### Changed
+
+- Apps that share no selected text now offer this as an action instead of
+  stating the problem and stopping.
+
 ## [0.1.0] - 2026-09-28
 
 First release.
@@ -49,5 +67,6 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Udhay-Adithya/peek/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Udhay-Adithya/peek/releases/tag/v0.1.0
