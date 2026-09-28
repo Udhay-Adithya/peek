@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Back layer: wand shaft and gold collar. Art is on a 160-unit grid. -->
+  <g transform="scale(6.4)">
+    <g transform="translate(128 128) rotate(225)">
+      <path d="M10,-10 H78 V10 H10 A10 10 0 0 1 10,-10Z" fill="#587482"/>
+      <path d="M10,-10 H78 V0 H0 A10 10 0 0 1 10,-10Z" fill="#455E6A"/>
+      <rect x="76" y="-11" width="11" height="22" rx="2" fill="#F4B63F"/>
+      <rect x="76" y="-11" width="11" height="11" fill="#DE9A26"/>
+    </g>
+  </g>
+</svg>

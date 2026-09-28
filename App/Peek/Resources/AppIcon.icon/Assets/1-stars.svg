@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Front layer: three sparkles. Art is on a 160-unit grid. -->
+  <g transform="scale(6.4)" fill="#FFCD3C" stroke="#FFCD3C" stroke-width="4" stroke-linejoin="round">
+    <path transform="translate(112 36)" d="M0,-14 Q2,-2 14,0 Q2,2 0,14 Q-2,2 -14,0 Q-2,-2 0,-14Z"/>
+    <path transform="translate(36 114) scale(0.8)" d="M0,-14 Q2,-2 14,0 Q2,2 0,14 Q-2,2 -14,0 Q-2,-2 0,-14Z"/>
+    <path transform="translate(128 80) scale(0.55)" d="M0,-14 Q2,-2 14,0 Q2,2 0,14 Q-2,2 -14,0 Q-2,-2 0,-14Z"/>
+  </g>
+</svg>

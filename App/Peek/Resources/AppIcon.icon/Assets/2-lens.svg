@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Middle layer: magnifying lens at the wand tip. Art is on a 160-unit grid. -->
+  <g transform="scale(6.4)">
+    <g transform="translate(128 128) rotate(225)">
+      <circle cx="112" cy="0" r="22" fill="#CFEFFC" stroke="#E6E6EC" stroke-width="10"/>
+      <path d="M95,0 A17 17 0 0 1 129,0Z" fill="#B3E1F5"/>
+      <path d="M90,0 A22 22 0 0 1 134,0" fill="none" stroke="#C5C5CF" stroke-width="10"/>
+      <path d="M102,9 A12 12 0 0 0 112,12" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
