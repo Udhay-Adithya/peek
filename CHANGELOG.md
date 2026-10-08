@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starting over.
 - Your original text is kept for the whole session and can be copied back to
   the clipboard at any point, including after a replacement.
+- Settings now reports whether Peek's Services menu entries are switched on.
+  macOS disables third-party services by default and says nothing about it, so
+  the menu items appear missing until you tick them — Settings now says so and
+  links to the right place.
 
 ### Security
 

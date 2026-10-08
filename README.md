@@ -36,6 +36,18 @@ to Applications. It updates itself from there.
 
 Peek lives in the menu bar and stays out of the way. Requires macOS 26 or later.
 
+### Turning on the menu entries
+
+macOS ships third-party Services **disabled by default**, so "Ask Peek" and the
+rewrite options will not appear in the right-click menu until you switch them
+on — once:
+
+> System Settings → Keyboard → Keyboard Shortcuts → **Services** → Text, and
+> tick Peek's four entries.
+
+Apps that were already open need relaunching to pick them up. Peek's Settings
+shows whether this is done and links straight there.
+
 ### Replacing Look Up
 
 Peek can use the same Force Click gesture Look Up uses. Turn Peek's Force Click

@@ -175,3 +175,75 @@ struct RewriteServiceCoverageTests {
         #expect(messages.count == RewriteAction.presets.count + 1)
     }
 }
+
+@Suite("ServicesAvailability")
+struct ServicesAvailabilityTests {
+
+    private func status(message: String,
+                        servicesMenu: Bool,
+                        contextMenu: Bool) -> [String: Any] {
+        [
+            "com.udhayadithya.Peek - Some Title - \(message)": [
+                "enabled_services_menu": NSNumber(value: servicesMenu),
+                "enabled_context_menu": NSNumber(value: contextMenu),
+            ],
+        ]
+    }
+
+    @Test("an absent entry counts as disabled, because that is the macOS default")
+    func absentMeansDisabled() {
+        // This is the case that made the feature look broken: nothing is
+        // written to the pbs domain until the user touches the checkbox, and
+        // the default behind that absence is off.
+        #expect(ServicesAvailability.isEnabled(message: "askPeek", in: [:]) == false)
+    }
+
+    @Test("reads an enabled service")
+    func readsEnabled() {
+        let dictionary = status(message: "askPeek", servicesMenu: true, contextMenu: true)
+        #expect(ServicesAvailability.isEnabled(message: "askPeek", in: dictionary))
+    }
+
+    @Test("either presentation counts as enabled")
+    func eitherPresentationCounts() {
+        // The context menu is where most people actually reach for it.
+        let contextOnly = status(message: "askPeek", servicesMenu: false, contextMenu: true)
+        #expect(ServicesAvailability.isEnabled(message: "askPeek", in: contextOnly))
+
+        let menuOnly = status(message: "askPeek", servicesMenu: true, contextMenu: false)
+        #expect(ServicesAvailability.isEnabled(message: "askPeek", in: menuOnly))
+    }
+
+    @Test("an explicitly disabled service reads as disabled")
+    func readsDisabled() {
+        let dictionary = status(message: "askPeek", servicesMenu: false, contextMenu: false)
+        #expect(ServicesAvailability.isEnabled(message: "askPeek", in: dictionary) == false)
+    }
+
+    @Test("matches on the message, not the user-visible title")
+    func matchesOnMessage() {
+        // Titles are display text that can be localised or reworded; the
+        // message is the stable identifier.
+        let dictionary = [
+            "com.udhayadithya.Peek - Completely Different Wording - rewriteShorten": [
+                "enabled_services_menu": NSNumber(value: true),
+            ],
+        ] as [String: Any]
+        #expect(ServicesAvailability.isEnabled(message: "rewriteShorten", in: dictionary))
+    }
+
+    @Test("does not confuse one service for another with a shared prefix")
+    func doesNotMatchPrefixes() {
+        // "rewrite" must not satisfy a lookup for "rewriteShorten".
+        let dictionary = status(message: "rewrite", servicesMenu: true, contextMenu: true)
+        #expect(ServicesAvailability.isEnabled(message: "rewriteShorten", in: dictionary) == false)
+    }
+
+    @Test("reports every declared service from the bundle")
+    func reportsDeclaredServices() {
+        let entries = ServicesAvailability.entries()
+        #expect(entries.count == RewriteAction.presets.count + 1)
+        #expect(entries.contains { $0.message == "askPeek" })
+        #expect(entries.allSatisfy { !$0.title.isEmpty })
+    }
+}

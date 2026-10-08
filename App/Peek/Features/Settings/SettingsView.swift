@@ -121,6 +121,48 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Services Menu") {
+                if ServicesAvailability.anyDisabled {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "exclamationmark.triangle").imageScale(.small)
+                            Text("Peek's menu entries are switched off")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundStyle(.orange)
+
+                        Text("macOS disables third-party services by default, which is why \"Ask Peek\" and the rewrite options may be missing from the right-click menu.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Button("Open Keyboard Settings") { ServicesAvailability.openSettings() }
+                            .controlSize(.small)
+
+                        Text("Then: Keyboard Shortcuts → Services → Text, and tick Peek's entries. Apps already open need relaunching to pick them up.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark.circle.fill").imageScale(.small)
+                        Text("Enabled").font(.caption)
+                    }
+                    .foregroundStyle(.green)
+                }
+
+                ForEach(ServicesAvailability.entries()) { entry in
+                    HStack {
+                        Image(systemName: entry.isEnabled ? "checkmark" : "xmark")
+                            .imageScale(.small)
+                            .foregroundStyle(entry.isEnabled ? .green : .orange)
+                        Text(entry.title).font(.caption)
+                        Spacer()
+                    }
+                }
+            }
+
             Section("Force Click") {
                 if ForceClickTrigger.isSupported {
                     Toggle("Invoke Peek with Force Click", isOn: $settings.forceClickEnabled)
