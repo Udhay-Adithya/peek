@@ -67,6 +67,31 @@ final class PanelViewModel {
     var onOpenSettings: (() -> Void)?
     /// Invoked when the user asks to browse conversation history.
     var onShowHistoryInWindow: (() -> Void)?
+
+    /// Non-nil while the panel is showing a rewrite rather than a conversation.
+    ///
+    /// Modelled as a separate object rather than another state on this one: a
+    /// rewrite has its own lifecycle and ends in a single decision, and
+    /// folding it in would put two unrelated state machines in one type.
+    private(set) var rewrite: RewriteViewModel?
+
+    /// Begins a rewrite of text handed over by the Services menu.
+    func beginRewrite(text: String, action: RewriteAction, frontApp: FrontmostApp?) {
+        captureTask?.cancel()
+        isCapturing = false
+
+        let session = RewriteViewModel(original: text,
+                                       action: action,
+                                       frontApp: frontApp,
+                                       engine: engine)
+        rewrite = session
+        session.run()
+    }
+
+    func endRewrite() {
+        rewrite?.cancel()
+        rewrite = nil
+    }
     /// Used to get the panel out of the way of a region capture.
     var onRequestHidePanel: (() -> Void)?
     var onRequestShowPanel: (() -> Void)?
@@ -144,6 +169,8 @@ final class PanelViewModel {
     /// is disorienting, and it silently feeds that history to the model.
     func prepareForInvocation() {
         guard !session.isStreaming else { return }
+        // A new assistant invocation supersedes any rewrite on screen.
+        endRewrite()
         session.reset()
         prompt = ""
         attachments.removeAll()

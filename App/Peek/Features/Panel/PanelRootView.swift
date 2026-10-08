@@ -9,6 +9,17 @@ struct PanelRootView: View {
     @State private var composerHeight: CGFloat = 20
 
     var body: some View {
+        Group {
+            if let rewrite = model.rewrite {
+                RewriteView(model: rewrite) { model.endRewrite() }
+            } else {
+                assistant
+            }
+        }
+        .onAppear { promptFocused = true }
+    }
+
+    private var assistant: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider().opacity(0.5)
@@ -16,7 +27,6 @@ struct PanelRootView: View {
             Divider().opacity(0.5)
             composer
         }
-        .onAppear { promptFocused = true }
     }
 
     // MARK: - Header

@@ -23,6 +23,7 @@ leaves the machine — and can use a cloud provider when you want a larger model
 | Answers | dictionary, thesaurus, a few detectors | anything you can ask |
 | Follow-ups | none | a full conversation |
 | Works in | apps that expose text to the system | the same, plus a clipboard fallback for Electron and Firefox-based apps |
+| Changes your text | no | fix grammar, improve writing, make it shorter |
 | Screenshots | no | attach a region or the whole screen |
 | History | none | searchable and persistent |
 | Invoked by | Force Click | Force Click, a global shortcut, the Services menu, or the menu bar |
@@ -52,6 +53,7 @@ Prefer to keep Look Up? Leave Force Click off and use `⌃⌥Space`.
 |---|---|---|
 | `⌃⌥Space` | none | Works on any Mac, with any input device |
 | "Ask Peek" in the Services menu | none | Appears in most apps; bindable to your own shortcut |
+| "… with Peek" in the Services menu | Accessibility to write back | Rewrites the selection in place, after showing you the result |
 | Menu bar | none | Left click opens, right click for the menu |
 | **Force Click** | Accessibility | Off by default — see [ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) |
 
