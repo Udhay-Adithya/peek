@@ -141,15 +141,29 @@ struct PanelRootView: View {
     private var contextArea: some View {
         switch model.selection {
         case .captured(let context) where !model.contextDismissed:
-            ContextChip(context: context) { model.dismissContext() }
+            ContextChip(context: context,
+                        fromScreen: model.recognizedFromScreen) { model.dismissContext() }
         case .permissionRequired:
             AccessibilityCard(
                 onGrant: { model.requestAccessibilityPermission() },
                 onOpenSettings: { model.openAccessibilitySettings() }
             )
         case .unsupported(let appName):
-            NoteRow(icon: "info.circle",
-                    text: "\(appName ?? "This app") doesn't share selected text.")
+            ReadFromScreenCard(
+                appName: appName,
+                isWorking: model.isRecognizingText,
+                error: model.recognitionError,
+                onRead: { model.readFromScreen() }
+            )
+        case .empty(let appName) where model.canReadFromScreen:
+            // The app exposed no selection API and the clipboard fallback also
+            // came back with nothing — reading the screen is what is left.
+            ReadFromScreenCard(
+                appName: appName,
+                isWorking: model.isRecognizingText,
+                error: model.recognitionError,
+                onRead: { model.readFromScreen() }
+            )
         case .withheld(let appName):
             NoteRow(icon: "hand.raised",
                     text: "Peek doesn't read from \(appName ?? "this app").")
@@ -261,17 +275,29 @@ struct PanelRootView: View {
 
 private struct ContextChip: View {
     let context: SelectionContext
+    /// Text read from the screen is labelled as such: OCR can misread, and the
+    /// user should know whether they are looking at the app's own text or
+    /// Peek's reading of the pixels.
+    var fromScreen: Bool = false
     let onRemove: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
-                Image(systemName: "text.quote")
+                Image(systemName: fromScreen ? "text.viewfinder" : "text.quote")
                     .imageScale(.small)
                     .foregroundStyle(.secondary)
                 Text(context.sourceAppName ?? "Selection")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
+                if fromScreen {
+                    Text("read from screen")
+                        .font(.system(size: 9, weight: .medium))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                        .foregroundStyle(.secondary)
+                }
                 if context.wasTruncated {
                     Text("truncated")
                         .font(.system(size: 9, weight: .medium))
@@ -294,6 +320,60 @@ private struct ContextChip: View {
                 .lineLimit(4)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// Offered when an app exposes no selection at all.
+///
+/// Recognising text from the screen is the last resort in the capture cascade
+/// and is deliberately a choice rather than an automatic fallback: Peek cannot
+/// know which part of the screen the user meant, and reading all of it would
+/// supply a wall of unrelated text as context.
+private struct ReadFromScreenCard: View {
+    let appName: String?
+    let isWorking: Bool
+    let error: String?
+    let onRead: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
+                Image(systemName: "text.viewfinder").imageScale(.small)
+                Text("\(appName ?? "This app") doesn't share selected text")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(.secondary)
+
+            Text("Peek can read it from the screen instead. Drag over the part you mean — recognition happens on this Mac.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button(action: onRead) {
+                    if isWorking {
+                        HStack(spacing: 5) {
+                            ProgressView().controlSize(.small).scaleEffect(0.6)
+                            Text("Reading\u{2026}")
+                        }
+                    } else {
+                        Text("Read from Screen")
+                    }
+                }
+                .controlSize(.small)
+                .disabled(isWorking)
+
+                if let error {
+                    Text(error)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

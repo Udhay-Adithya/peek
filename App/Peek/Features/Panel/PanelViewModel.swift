@@ -27,6 +27,22 @@ final class PanelViewModel {
     private(set) var isCapturingScreenshot = false
     private(set) var screenshotError: String?
 
+    /// Text recognition state, kept separate from screenshot state: one is
+    /// reading the screen for context, the other is attaching a picture.
+    private(set) var isRecognizingText = false
+    private(set) var recognitionError: String?
+    /// Set when the current context came from OCR rather than a selection, so
+    /// the transcript can say where the text came from.
+    private(set) var recognizedFromScreen = false
+
+    /// Remembered so OCR context can be attributed to the app the user was in,
+    /// rather than to whatever became frontmost during region selection.
+    private var lastFrontAppName: String?
+
+    /// Whether the Accessibility layer reported this app as exposing no
+    /// selection API at all, before the clipboard fallback had its turn.
+    private var accessibilityReportedUnsupported = false
+
     struct PendingAttachment: Identifiable, Sendable {
         let id = UUID()
         let attachment: ImageAttachment
@@ -42,6 +58,7 @@ final class PanelViewModel {
     private let capture: any SelectionCapturing
     private let clipboardCapture: any ClipboardCapturing
     private let screenshots = ScreenshotService()
+    private let recognizer = VisionTextRecognizer()
     private let settings: AppSettings
     private let engine: any ProviderResolving
     private var captureTask: Task<Void, Never>?
@@ -131,12 +148,87 @@ final class PanelViewModel {
         prompt = ""
         attachments.removeAll()
         screenshotError = nil
+        recognitionError = nil
+        recognizedFromScreen = false
         didContinueConversation = false
     }
 
     func openConversation(_ id: ConversationID) {
         isShowingHistory = false
         Task { await session.load(id) }
+    }
+
+    // MARK: - Reading from the screen
+
+    /// Whether offering to read the screen makes sense right now.
+    ///
+    /// Keyed on what *Accessibility* reported, not on the final outcome. The
+    /// clipboard fallback turns an unsupported app into `.empty` when the
+    /// synthetic copy yields nothing, which is indistinguishable from an app
+    /// that supports selections and simply had none — and those two cases want
+    /// opposite answers. A withheld app is never offered OCR, since that would
+    /// amount to inviting the user to screenshot their password manager.
+    var canReadFromScreen: Bool {
+        guard accessibilityReportedUnsupported else { return false }
+        switch selection {
+        case .unsupported, .empty: return true
+        default:                   return false
+        }
+    }
+
+    /// Lets the user drag out a region, then reads its text locally.
+    ///
+    /// Deliberately an explicit action rather than an automatic fallback.
+    /// Recognising the whole screen would supply a wall of unrelated text as
+    /// "context" — the toolbar, the sidebar, whatever is behind the window —
+    /// and Peek cannot know which part the user meant. Dragging a region is the
+    /// user saying exactly that.
+    func readFromScreen() {
+        guard !isRecognizingText else { return }
+        isRecognizingText = true
+        recognitionError = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isRecognizingText = false }
+
+            guard ScreenRecordingPermission.isGranted else {
+                ScreenRecordingPermission.request()
+                self.recognitionError = "Grant Screen Recording in System Settings, then try again."
+                return
+            }
+
+            // The panel would otherwise sit over the region being selected.
+            self.onRequestHidePanel?()
+            let rect = await RegionSelectionOverlay().presentAndWaitForSelection()
+            self.onRequestShowPanel?()
+
+            guard let rect else { return }   // cancelled
+
+            do {
+                let image = try await self.screenshots.captureRegionForRecognition(rect)
+                guard let recognized = try await self.recognizer.recognizeText(in: image) else {
+                    self.recognitionError = "No readable text in that region."
+                    return
+                }
+                guard let sanitized = CapturePolicy().sanitize(recognized.text) else {
+                    self.recognitionError = "No readable text in that region."
+                    return
+                }
+
+                self.contextDismissed = false
+                self.selection = .captured(SelectionContext(
+                    text: sanitized.text,
+                    sourceAppName: self.lastFrontAppName,
+                    sourceBundleID: nil,
+                    selectionBounds: nil,
+                    wasTruncated: sanitized.wasTruncated
+                ))
+                self.recognizedFromScreen = true
+            } catch {
+                self.recognitionError = error.localizedDescription
+            }
+        }
     }
 
     var hasCredentials: Bool { engine.hasCredentials }
@@ -238,6 +330,10 @@ final class PanelViewModel {
         captureTask?.cancel()
         contextDismissed = false
         didContinueConversation = false
+        recognizedFromScreen = false
+        recognitionError = nil
+        accessibilityReportedUnsupported = false
+        lastFrontAppName = frontApp?.name
         isCapturing = true
 
         let capture = self.capture
@@ -257,6 +353,13 @@ final class PanelViewModel {
             // Accessibility is always tried first: it is instantaneous, has no
             // side effects, and gives selection bounds. The clipboard fallback
             // only runs where the app genuinely exposes nothing.
+            // Recorded before the fallback runs: it can turn an unsupported app
+            // into `.empty`, and only the Accessibility answer distinguishes
+            // "this app exposes nothing" from "nothing was selected".
+            if case .unsupported = outcome {
+                self.accessibilityReportedUnsupported = true
+            }
+
             let final: SelectionOutcome
             if case .unsupported = outcome, self.settings.clipboardFallbackEnabled {
                 final = await self.clipboardCapture.capture(frontApp: frontApp)

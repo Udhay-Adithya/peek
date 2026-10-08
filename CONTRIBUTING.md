@@ -84,6 +84,10 @@ Every user-visible change needs an entry under `## [Unreleased]` in
 Write for someone deciding whether to update, not for someone reading the diff.
 Internal refactors, test changes and CI tweaks do not need an entry.
 
+A merged feature is released — see [docs/releasing.md](docs/releasing.md).
+Peek has no other distribution channel, so a feature sitting unreleased on
+`main` is a feature nobody has.
+
 ## Pull requests
 
 One concern per pull request. Include what you actually verified — "builds and

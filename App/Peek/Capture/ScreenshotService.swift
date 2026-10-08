@@ -49,9 +49,34 @@ struct ScreenshotService {
         return try await capture(sourceRect: rect, point: CGPoint(x: rect.midX, y: rect.midY))
     }
 
+    /// Captures a region as an unencoded, full-resolution image.
+    ///
+    /// For text recognition rather than for sending. Both differences matter:
+    /// the ``ImageBudget`` downscale that keeps request sizes sane also throws
+    /// away the pixels small type is made of, and JPEG's ringing around glyph
+    /// edges is exactly the artefact OCR mistakes for strokes.
+    func captureRegionForRecognition(_ rect: CGRect) async throws -> CGImage {
+        guard rect.width >= 1, rect.height >= 1 else { throw Failure.captureFailed }
+        return try await captureImage(sourceRect: rect,
+                                      point: CGPoint(x: rect.midX, y: rect.midY),
+                                      applyBudget: false)
+    }
+
     // MARK: - Capture
 
     private func capture(sourceRect: CGRect?, point: CGPoint?) async throws -> ImageAttachment {
+        let image = try await captureImage(sourceRect: sourceRect, point: point, applyBudget: true)
+
+        guard let data = Self.encodeJPEG(image) else { throw Failure.encodingFailed }
+
+        // Byte count only — never the image itself.
+        Self.logger.debug("screenshot captured px=\(image.width, privacy: .public)x\(image.height, privacy: .public) bytes=\(data.count, privacy: .public)")
+        return ImageAttachment(mimeType: "image/jpeg", data: data)
+    }
+
+    private func captureImage(sourceRect: CGRect?,
+                              point: CGPoint?,
+                              applyBudget: Bool) async throws -> CGImage {
         guard ScreenRecordingPermission.isGranted else { throw Failure.permissionDenied }
 
         let content: SCShareableContent
@@ -92,27 +117,23 @@ struct ScreenshotService {
             regionInPoints = CGSize(width: CGFloat(display.width), height: CGFloat(display.height))
         }
 
-        // Render straight to the size we intend to send.
+        // Render straight to the size we intend to use. For an attachment that
+        // is the budgeted size, so a 6K display never materialises a ~70MB
+        // surface; for recognition it is full resolution, because the detail
+        // the budget discards is the detail small type is made of.
         let pixelSize = CGSize(width: regionInPoints.width * screen.backingScaleFactor,
                                height: regionInPoints.height * screen.backingScaleFactor)
-        let target = ImageBudget.targetSize(for: pixelSize)
+        let target = applyBudget ? ImageBudget.targetSize(for: pixelSize) : pixelSize
         configuration.width = Int(target.width)
         configuration.height = Int(target.height)
 
-        let image: CGImage
         do {
-            image = try await SCScreenshotManager.captureImage(contentFilter: filter,
-                                                               configuration: configuration)
+            return try await SCScreenshotManager.captureImage(contentFilter: filter,
+                                                              configuration: configuration)
         } catch {
             Self.logger.error("captureImage failed")
             throw Failure.captureFailed
         }
-
-        guard let data = Self.encodeJPEG(image) else { throw Failure.encodingFailed }
-
-        // Byte count only — never the image itself.
-        Self.logger.debug("screenshot captured px=\(image.width, privacy: .public)x\(image.height, privacy: .public) bytes=\(data.count, privacy: .public)")
-        return ImageAttachment(mimeType: "image/jpeg", data: data)
     }
 
     // MARK: - Geometry

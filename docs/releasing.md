@@ -4,6 +4,18 @@ Peek ships **outside the Mac App Store** — see
 [ADR 0002](adr/0002-developer-id-not-app-store.md) — so it is distributed as a
 notarized DMG on GitHub Releases and updates itself with Sparkle.
 
+## When to release
+
+**Every minor version gets a release.** A feature that reaches `main` and is not
+released is a feature nobody has, since there is no other way to get Peek.
+
+Releases are skipped only for changes users cannot observe: documentation, CI,
+tests, refactors and tooling. Those accumulate under `[Unreleased]` and ship
+with whatever lands next.
+
+A fix worth a patch release is one a user is currently hitting. A typo in a
+comment is not.
+
 ## One-time setup
 
 ### 1. Developer ID Application certificate
