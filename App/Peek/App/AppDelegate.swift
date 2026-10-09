@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var engine: AssistantEngine?
     private var router: MainWindowRouter?
     private var services: ServicesProvider?
+    private var frontmostTracker: FrontmostAppTracker?
     private var mainWindow: MainWindowController?
     private var updates: UpdateController?
     private var forceClick: ForceClickTrigger?
@@ -131,7 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // "Ask Peek" in every app's Services menu — no permissions required.
+        let frontmostTracker = FrontmostAppTracker()
+        self.frontmostTracker = frontmostTracker
+
         let services = ServicesProvider(
+            sourceApp: { [weak frontmostTracker] in frontmostTracker?.targetApp() },
             onSelection: { [weak panel] text, appName in
                 panel?.show(providedText: text, appName: appName)
             },

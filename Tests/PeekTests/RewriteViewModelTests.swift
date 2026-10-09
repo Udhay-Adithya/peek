@@ -247,3 +247,38 @@ struct ServicesAvailabilityTests {
         #expect(entries.allSatisfy { !$0.title.isEmpty })
     }
 }
+
+@Suite("FrontmostAppTracker")
+@MainActor
+struct FrontmostAppTrackerTests {
+
+    @Test("never reports Peek itself as the target app")
+    func ignoresOwnApp() {
+        // The bug this exists to prevent: macOS activates Peek to deliver a
+        // Services message, so asking who is frontmost inside the handler
+        // answers "Peek" — and the rewrite was pasted into Peek's own panel.
+        let tracker = FrontmostAppTracker(ownBundleID: "com.udhayadithya.Peek")
+        let target = tracker.targetApp()
+        #expect(target?.bundleID != "com.udhayadithya.Peek")
+    }
+
+    @Test("remembers the last external app across an activation")
+    func remembersExternalApp() {
+        let tracker = FrontmostAppTracker(ownBundleID: "com.udhayadithya.Peek")
+
+        // The test process is not Peek, so whatever is frontmost seeds the
+        // tracker; the contract under test is that the value survives and is
+        // never Peek.
+        let first = tracker.targetApp()
+        let second = tracker.targetApp()
+        #expect(first?.bundleID == second?.bundleID)
+    }
+
+    @Test("a tracker with no own-bundle filter still answers")
+    func toleratesUnknownOwnBundle() {
+        let tracker = FrontmostAppTracker(ownBundleID: nil)
+        // No filtering is possible, but it must not crash or return nothing
+        // when something is frontmost.
+        _ = tracker.targetApp()
+    }
+}

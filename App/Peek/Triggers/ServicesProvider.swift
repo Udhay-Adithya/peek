@@ -19,9 +19,17 @@ final class ServicesProvider: NSObject {
     private let onSelection: (String, String?) -> Void
     /// Invoked when the user asks for the selection to be rewritten.
     private let onRewrite: (String, RewriteAction, FrontmostApp?) -> Void
+    /// Supplies the app the user was working in.
+    ///
+    /// Deliberately not `NSWorkspace.frontmostApplication`: macOS activates
+    /// Peek to deliver a service message, so by the time these handlers run
+    /// the frontmost app *is* Peek.
+    private let sourceApp: () -> FrontmostApp?
 
-    init(onSelection: @escaping (String, String?) -> Void,
+    init(sourceApp: @escaping () -> FrontmostApp?,
+         onSelection: @escaping (String, String?) -> Void,
          onRewrite: @escaping (String, RewriteAction, FrontmostApp?) -> Void) {
+        self.sourceApp = sourceApp
         self.onSelection = onSelection
         self.onRewrite = onRewrite
         super.init()
@@ -52,12 +60,11 @@ final class ServicesProvider: NSObject {
             return
         }
 
-        // The requesting app is still frontmost at this point.
-        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+        let requester = sourceApp()?.name
 
         // Length only — the selection itself is user data.
         Self.logger.debug("service invoked chars=\(text.count, privacy: .public)")
-        onSelection(text, sourceApp)
+        onSelection(text, requester)
     }
 
     // MARK: - Rewrite services
@@ -94,9 +101,11 @@ final class ServicesProvider: NSObject {
             return
         }
 
-        // Captured here, while the requesting app is still frontmost — the
-        // write-back needs its pid, and Peek's panel is about to take focus.
-        let frontApp = FrontmostApp.current()
+        // The write-back needs the requesting app's pid. Asking who is
+        // frontmost here would answer "Peek", because macOS activated Peek to
+        // deliver this message — which is exactly how an early version of this
+        // pasted the rewrite into Peek's own panel.
+        let frontApp = sourceApp()
 
         Self.logger.debug("rewrite service invoked action=\(action.title, privacy: .public) chars=\(text.count, privacy: .public)")
         onRewrite(text, action, frontApp)
