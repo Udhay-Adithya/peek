@@ -11,15 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Rewrite text in place.** Peek can now change your text, not just answer
+- **Rewrite your text.** Peek can now change your writing, not just answer
   questions about it. Select anything and choose **Fix Spelling & Grammar**,
-  **Improve Writing** or **Make Shorter** from the Services menu — Peek shows
-  you its version first, and replaces the original only when you accept it.
+  **Improve Writing** or **Make Shorter** from the Services menu, and Peek
+  shows you its version alongside your own.
+
+  **Known limitation:** writing the result back into the source app does not
+  work reliably yet, so use **Copy** and paste it yourself for now. Your
+  original text is never modified without you pressing Replace, and is always
+  recoverable from the panel. Tracked in
+  [#13](https://github.com/Udhay-Adithya/peek/issues/13).
 - The proposal streams in as it is written, so a long passage shows progress
   rather than sitting blank, and you can switch to a different rewrite without
   starting over.
 - Your original text is kept for the whole session and can be copied back to
-  the clipboard at any point, including after a replacement.
+  the clipboard at any point.
 - Settings now reports whether Peek's Services menu entries are switched on.
   macOS disables third-party services by default and says nothing about it, so
   the menu items appear missing until you tick them — Settings now says so and
