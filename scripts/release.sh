@@ -63,12 +63,49 @@ builds but CANNOT be notarized or distributed. Create the other kind:
 This requires the Account Holder role on the paid developer account."
 fi
 
-if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
-  fail "Notarization profile '$NOTARY_PROFILE' not found. Run:
+# Apple's secure timestamp service, checked before anything is built.
+#
+# codesign contacts it for every signature, and without it the archive fails
+# several minutes in with "A timestamp was expected but was not found" — a
+# message that says nothing about the actual cause. Notarization requires a
+# timestamped signature, so there is no point proceeding without it.
+if ! nc -z -G 8 timestamp.apple.com 443 >/dev/null 2>&1; then
+  fail "Cannot reach Apple's timestamp service (timestamp.apple.com:443).
+
+Every signature needs a secure timestamp and notarization requires one, so the
+build would fail partway through with an unhelpful error.
+
+This is a network problem, not a configuration one. Try another network — a
+phone hotspot is usually enough to confirm it."
+fi
+
+# Distinguishes a missing profile from an unreachable Apple, because
+# `notarytool history` is a network call and its failure otherwise reads as
+# "your credentials are missing" — sending you to re-enter an app-specific
+# password that was never the problem.
+NOTARY_CHECK=$(xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 || true)
+case "$NOTARY_CHECK" in
+  *NSURLErrorDomain*|*"timed out"*|*"could not connect"*|*"network connection"*)
+    fail "Cannot reach Apple's notary service.
+
+The '$NOTARY_PROFILE' profile may well be fine — this request did not get far
+enough to find out:
+
+$(printf '%s' "$NOTARY_CHECK" | head -2)"
+    ;;
+  *"Successfully received submission history"*|*"createdDate"*|*"No submissions"*|*"id:"*)
+    : # reachable and authenticated
+    ;;
+  *)
+    fail "Notarization profile '$NOTARY_PROFILE' could not be used. Run:
 
   xcrun notarytool store-credentials $NOTARY_PROFILE \\
-    --apple-id \"<your-apple-id>\" --team-id $TEAM_ID --password \"<app-specific-password>\""
-fi
+    --apple-id \"<your-apple-id>\" --team-id $TEAM_ID --password \"<app-specific-password>\"
+
+notarytool said:
+$(printf '%s' "$NOTARY_CHECK" | head -3)"
+    ;;
+esac
 
 command -v xcodegen >/dev/null || fail "xcodegen not installed (brew install xcodegen)"
 
