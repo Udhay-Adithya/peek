@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
+### Added
+
+- **Rewrite your text.** Peek can now change your writing, not just answer
+  questions about it. Select anything and choose **Fix Spelling & Grammar**,
+  **Improve Writing** or **Make Shorter** from the Services menu, and Peek
+  shows you its version alongside your own.
+
+  **Known limitation:** writing the result back into the source app does not
+  work reliably yet, so use **Copy** and paste it yourself for now. Your
+  original text is never modified without you pressing Replace, and is always
+  recoverable from the panel. Tracked in
+  [#13](https://github.com/Udhay-Adithya/peek/issues/13).
+- The proposal streams in as it is written, so a long passage shows progress
+  rather than sitting blank, and you can switch to a different rewrite without
+  starting over.
+- Your original text is kept for the whole session and can be copied back to
+  the clipboard at any point.
+- Settings now reports whether Peek's Services menu entries are switched on.
+  macOS disables third-party services by default and says nothing about it, so
+  the menu items appear missing until you tick them — Settings now says so and
+  links to the right place.
+
+### Security
+
+- Rewriting refuses to write into password managers and secure text fields,
+  under the same deny-list that governs reading.
+- The rewrite prompt treats your selection strictly as text to transform, so
+  instructions embedded in a document are rewritten rather than followed.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
@@ -67,6 +98,7 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Udhay-Adithya/peek/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Udhay-Adithya/peek/releases/tag/v0.1.0

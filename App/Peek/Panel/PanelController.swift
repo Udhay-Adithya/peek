@@ -131,6 +131,26 @@ final class PanelController {
         viewModel.presentProvidedSelection(text: text, appName: appName)
     }
 
+    /// Shows the panel with a rewrite of text supplied by the Services menu.
+    ///
+    /// Does not run context capture: the text is already in hand, and the
+    /// front app is captured by the service before Peek takes focus so the
+    /// write-back knows where to go.
+    func show(rewriteOf text: String, action: RewriteAction, frontApp: FrontmostApp?) {
+        let screens = NSScreen.screens.map {
+            PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        }
+        let anchor = CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        if let placement = PanelPlacement.place(panelSize: panel.frame.size,
+                                                anchor: anchor,
+                                                screens: screens) {
+            panel.setFrameOrigin(placement.origin)
+        }
+        panel.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
+        viewModel.beginRewrite(text: text, action: action, frontApp: frontApp)
+    }
+
     /// Re-shows the panel without re-reading the selection.
     ///
     /// Used after a region capture: the panel was hidden to get out of the
