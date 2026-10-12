@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-12
+
+### Added
+
+- **Control Center control.** Peek can be opened from Control Center, or pinned
+  to the menu-bar clock, for when neither a shortcut nor the menu bar is to
+  hand.
+- **A `peek://` URL scheme** — `peek://show`, `peek://conversations` and
+  `peek://settings` open the corresponding surface. This is how the control
+  reaches the app, and it works from a script or `open` as well. It only ever
+  opens something; nothing can be sent through it.
+
 ## [0.5.0] - 2026-10-12
 
 ### Added
@@ -142,7 +154,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...v0.4.0

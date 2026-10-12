@@ -141,3 +141,29 @@ private actor FailingStore: ConversationStore {
     func mostRecentConversation(updatedWithin interval: TimeInterval) throws -> ConversationSummary? { nil }
     func usageStatistics(lastDays days: Int, calendar: Calendar) throws -> UsageStatistics { .empty }
 }
+
+@Suite("URL scheme")
+struct URLSchemeTests {
+
+    @Test("the peek scheme is registered in the bundle")
+    func schemeRegistered() throws {
+        // The Control Center extension reaches the app through this; a missing
+        // registration makes the control silently do nothing.
+        let bundle = Bundle(for: AppDelegate.self)
+        let types = try #require(
+            bundle.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
+        )
+        let schemes = types.flatMap { ($0["CFBundleURLSchemes"] as? [String]) ?? [] }
+        #expect(schemes.contains("peek"))
+    }
+
+    @Test("the control extension is embedded")
+    func extensionEmbedded() throws {
+        // WidgetKit loads controls from an appex; if it is not embedded the
+        // control never appears, and the app still builds and runs fine.
+        let bundle = Bundle(for: AppDelegate.self)
+        let plugins = try #require(bundle.builtInPlugInsURL)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: plugins.path)) ?? []
+        #expect(names.contains("PeekControls.appex"))
+    }
+}
