@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandboxed, unlike the host app.
+	     macOS requires app extensions to be sandboxed regardless of whether
+	     their container is, and PlugInKit silently refuses to register one
+	     that is not — the extension installs, signs and validates perfectly
+	     and simply never appears in Control Center.
+	     Peek itself cannot be sandboxed (ADR 0002), but the extension needs
+	     nothing the sandbox withholds: it only opens a peek:// URL. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>

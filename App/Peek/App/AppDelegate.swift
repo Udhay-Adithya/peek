@@ -234,6 +234,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Handles `peek://` URLs.
+    ///
+    /// Used by the Control Center control, and usable from a script or
+    /// `open peek://show`. Kept to the actions a caller outside the app can
+    /// reasonably ask for: showing a surface, never sending anything.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "peek" {
+            switch url.host {
+            case "show", nil:
+                panel?.show()
+            case "conversations":
+                router?.pane = .conversations
+                mainWindow?.show()
+            case "settings":
+                router?.pane = .settings
+                mainWindow?.show()
+            default:
+                break
+            }
+        }
+    }
+
     /// Opens the conversation chosen from a Spotlight result.
     func application(_ application: NSApplication,
                      continue userActivity: NSUserActivity,

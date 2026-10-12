@@ -68,6 +68,7 @@ Prefer to keep Look Up? Leave Force Click off and use `⌃⌥Space`.
 | "… with Peek" in the Services menu | Accessibility to write back | Rewrites the selection in place, after showing you the result |
 | Menu bar | none | Left click opens, right click for the menu |
 | Shortcuts, Spotlight or Siri | none | *Ask Peek* returns the answer as text an automation can use |
+| Control Center | none | Pinnable to the menu-bar clock |
 | **Force Click** | Accessibility | Off by default — see [ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) |
 
 Force Click is not reachable through any public macOS API, which
