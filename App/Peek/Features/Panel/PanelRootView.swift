@@ -191,6 +191,44 @@ struct PanelRootView: View {
         }
     }
 
+    // MARK: - Dictation
+
+    @ViewBuilder
+    private var dictationStatus: some View {
+        switch model.dictationState {
+        case .preparing(let message):
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.small).scaleEffect(0.6)
+                Text(message).font(.system(size: 10))
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+        case .listening:
+            HStack(spacing: 5) {
+                Image(systemName: "waveform").imageScale(.small)
+                Text("Listening\u{2026} speak, then press the microphone again.")
+                    .font(.system(size: 10))
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+        case .failed(let message):
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.triangle").imageScale(.small)
+                Text(message).font(.system(size: 10))
+                Button("Open Settings") { MicrophonePermission.openSettings() }
+                    .buttonStyle(.link)
+                    .font(.system(size: 10))
+            }
+            .foregroundStyle(.orange)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+        case .idle:
+            EmptyView()
+        }
+    }
+
     // MARK: - Composer
 
     private var composer: some View {
@@ -213,6 +251,8 @@ struct PanelRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            dictationStatus
+
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
                     Button("Capture Screen") { model.captureScreen() }
@@ -229,6 +269,11 @@ struct PanelRootView: View {
                 .disabled(model.isCapturingScreenshot)
                 .help("Attach a screenshot")
                 .accessibilityLabel("Attach a screenshot")
+
+                DictationButton(state: model.dictationState,
+                                isDictating: model.isDictating) {
+                    model.toggleDictation()
+                }
 
                 PromptEditor(text: $model.prompt,
                              minHeight: 20,
@@ -491,5 +536,50 @@ private struct AttachmentStrip: View {
             .padding(.vertical, 2)
         }
         .frame(height: 60)
+    }
+}
+
+/// The composer's microphone button.
+///
+/// One control for both directions, because to the user dictation is one thing
+/// that is either on or off. While listening it pulses, so an open microphone
+/// is never ambiguous — that matters more here than visual restraint does.
+private struct DictationButton: View {
+    let state: DictationState
+    let isDictating: Bool
+    let action: () -> Void
+
+    @State private var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isListening ? "mic.fill" : "mic")
+                .imageScale(.medium)
+                .foregroundStyle(isListening ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .opacity(isListening && pulsing && !reduceMotion ? 0.45 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(isPreparing)
+        .help(isDictating ? "Stop dictating" : "Dictate")
+        .accessibilityLabel(isDictating ? "Stop dictating" : "Dictate")
+        .onChange(of: isListening) { _, listening in
+            guard !reduceMotion else { return }
+            if listening {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever()) { pulsing = true }
+            } else {
+                withAnimation(.default) { pulsing = false }
+            }
+        }
+    }
+
+    private var isListening: Bool {
+        if case .listening = state { return true }
+        return false
+    }
+
+    private var isPreparing: Bool {
+        if case .preparing = state { return true }
+        return false
     }
 }

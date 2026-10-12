@@ -193,6 +193,8 @@ final class PanelController {
 
     func hide() {
         removeOutsideClickMonitor()
+        // Never leave the microphone running behind a hidden panel.
+        viewModel.stopDictation()
         panel.orderOut(nil)
     }
 
