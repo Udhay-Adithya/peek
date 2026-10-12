@@ -167,3 +167,53 @@ struct URLSchemeTests {
         #expect(names.contains("PeekControls.appex"))
     }
 }
+
+@Suite("Control extension packaging")
+struct ControlExtensionTests {
+
+    private var appexURL: URL? {
+        Bundle(for: AppDelegate.self).builtInPlugInsURL?
+            .appendingPathComponent("PeekControls.appex")
+    }
+
+    @Test("the control extension declares the widget extension point")
+    func declaresExtensionPoint() throws {
+        let url = try #require(appexURL)
+        let plist = url.appendingPathComponent("Contents/Info.plist")
+        let data = try Data(contentsOf: plist)
+        let parsed = try #require(try PropertyListSerialization.propertyList(
+            from: data, options: [], format: nil) as? [String: Any])
+        let extensionInfo = try #require(parsed["NSExtension"] as? [String: Any])
+        #expect(extensionInfo["NSExtensionPointIdentifier"] as? String
+                == "com.apple.widgetkit-extension")
+    }
+
+    @Test("the control extension is sandboxed")
+    func extensionIsSandboxed() throws {
+        // macOS refuses to register an unsandboxed app extension, and does so
+        // silently: it installs, signs and validates, then never appears in
+        // Control Center. The host app cannot be sandboxed (ADR 0002), which
+        // makes it tempting to match here — that was the bug.
+        let url = try #require(appexURL)
+        let entitlements = url.appendingPathComponent("Contents/Resources/PeekControls.entitlements")
+
+        // Read from the source entitlements when present in the built product;
+        // otherwise assert via codesign on the signed appex.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        process.arguments = ["-d", "--entitlements", ":-", url.path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+                            as: UTF8.self)
+        process.waitUntilExit()
+
+        _ = entitlements
+        #expect(output.contains("com.apple.security.app-sandbox"))
+        // The value must be true; `<false/>` immediately after the key is the
+        // failure this guards.
+        #expect(output.contains("app-sandbox</key><false/>") == false)
+    }
+}
