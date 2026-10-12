@@ -53,8 +53,13 @@ struct SelectionWriter {
     }
 
     /// Replaces the selection in `frontApp` with `text`.
+    ///
+    /// Asynchronous because the target application has to be brought forward
+    /// first. Both write routes need it: a synthetic ⌘V posted to a background
+    /// process is simply ignored, and several apps expose
+    /// `kAXSelectedTextAttribute` as read-only while they are inactive.
     @discardableResult
-    func replaceSelection(with text: String, in frontApp: FrontmostApp?) throws -> Route {
+    func replaceSelection(with text: String, in frontApp: FrontmostApp?) async throws -> Route {
         guard let frontApp else { throw Failure.noFocusedElement }
 
         // The deny-list governs writing as firmly as reading. Pasting a model's
@@ -63,6 +68,11 @@ struct SelectionWriter {
             Self.logger.debug("write refused: deny-listed")
             throw Failure.refused
         }
+
+        // Bring the target forward before touching it. Peek's panel holds key
+        // focus by this point, which is exactly why the first version of this
+        // silently wrote nowhere.
+        try await activate(frontApp)
 
         let appElement = AXUIElementCreateApplication(frontApp.processID)
         AXUIElementSetMessagingTimeout(appElement, 0.25)
@@ -73,9 +83,12 @@ struct SelectionWriter {
                                             &focusedRef) == .success,
               let focusedRef,
               CFGetTypeID(focusedRef) == AXUIElementGetTypeID() else {
-            // No focused element at all: the paste route is the only option,
-            // and it needs a focused text view just as much, so fail here.
-            Self.logger.debug("write failed: no focused element")
+            // No focused element at all: the paste route needs a focused text
+            // view just as much, so there is nothing to fall back to.
+            // Logged at error level so it survives in the unified log —
+            // debug-level messages are not persisted, which is why this path
+            // was invisible the first time it failed.
+            Self.logger.error("write failed: no focused element in \(frontApp.bundleID ?? "unknown", privacy: .public)")
             throw Failure.noFocusedElement
         }
         let focused = focusedRef as! AXUIElement   // safe: type ID checked above
@@ -85,18 +98,56 @@ struct SelectionWriter {
             throw Failure.refused
         }
 
-        // Preferred route: ask the app to replace its own selection.
-        let status = AXUIElementSetAttributeValue(focused,
-                                                  kAXSelectedTextAttribute as CFString,
-                                                  text as CFTypeRef)
-        if status == .success {
-            Self.logger.debug("write ok via accessibility chars=\(text.count, privacy: .public)")
-            return .accessibility
+        // Preferred route: ask the app to replace its own selection. Asking
+        // first whether the attribute is writable turns a blind attempt into a
+        // decision, and says so in the log either way.
+        var settable: DarwinBoolean = false
+        AXUIElementIsAttributeSettable(focused,
+                                       kAXSelectedTextAttribute as CFString,
+                                       &settable)
+
+        if settable.boolValue {
+            let status = AXUIElementSetAttributeValue(focused,
+                                                      kAXSelectedTextAttribute as CFString,
+                                                      text as CFTypeRef)
+            if status == .success {
+                Self.logger.info("write ok via accessibility chars=\(text.count, privacy: .public)")
+                return .accessibility
+            }
+            Self.logger.error("accessibility write rejected status=\(status.rawValue, privacy: .public) app=\(frontApp.bundleID ?? "unknown", privacy: .public)")
+        } else {
+            Self.logger.info("selected text not settable in \(frontApp.bundleID ?? "unknown", privacy: .public), using paste")
         }
 
-        Self.logger.debug("accessibility write rejected (status=\(status.rawValue, privacy: .public)), falling back to paste")
         try pasteReplacement(text, to: frontApp.processID)
+        Self.logger.info("write ok via paste chars=\(text.count, privacy: .public)")
         return .paste
+    }
+
+    // MARK: - Activation
+
+    /// Brings `app` forward and waits for it to actually become frontmost.
+    ///
+    /// Polled rather than slept on: activation is asynchronous and a fixed
+    /// delay is either too short on a loaded machine or latency the user feels
+    /// on every rewrite.
+    private func activate(_ app: FrontmostApp) async throws {
+        guard let running = NSRunningApplication(processIdentifier: app.processID) else {
+            throw Failure.noFocusedElement
+        }
+        guard !running.isActive else { return }
+
+        running.activate(options: [])
+
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline {
+            if running.isActive { return }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        // Carry on regardless: some apps report activation late, and the write
+        // may still land. A failure here is reported by the write itself.
+        Self.logger.error("activation timed out for \(app.bundleID ?? "unknown", privacy: .public)")
     }
 
     // MARK: - Paste fallback
