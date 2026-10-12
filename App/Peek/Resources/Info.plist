@@ -128,6 +128,10 @@
 	<string>obgL2g2+cxZpEqjr4lArI43ixIKGvpkcHSC/1Y33ols=</string>
 	<key>SUEnableInstallerLauncherService</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Peek uses the microphone to turn what you say into text in the question field. Audio is transcribed by Apple's on-device speech models and is never recorded or sent anywhere.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Peek transcribes dictated questions with Apple's on-device speech recognition, so what you say stays on your Mac.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Udhay Adithya J. All rights reserved.</string>
 </dict>

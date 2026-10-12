@@ -7,5 +7,11 @@
 	     lifts that restriction, so Peek ships Developer ID + notarized. -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
+	<!-- Required for dictation. The Hardened Runtime denies microphone access
+	     without this entitlement even in an unsandboxed app: the usage string
+	     alone gets you a prompt the user can accept and a capture session that
+	     then fails. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
 </dict>
 </plist>
