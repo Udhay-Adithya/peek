@@ -13,6 +13,9 @@ final class StatusItemController {
     private let onOpenSettings: () -> Void
     private let onOpenWindow: () -> Void
     private let onQuit: () -> Void
+    private let onDropFiles: ([URL]) -> Void
+    private let onDropText: (String) -> Void
+    private var dropView: StatusItemDropView?
     private let menu: NSMenu
     private var twinkleTimer: Timer?
     private var twinkleFrame = 0
@@ -35,16 +38,21 @@ final class StatusItemController {
     init(onPrimaryAction: @escaping () -> Void,
          onOpenSettings: @escaping () -> Void,
          onOpenWindow: @escaping () -> Void,
+         onDropFiles: @escaping ([URL]) -> Void,
+         onDropText: @escaping (String) -> Void,
          onQuit: @escaping () -> Void) {
         self.onPrimaryAction = onPrimaryAction
         self.onOpenSettings = onOpenSettings
         self.onOpenWindow = onOpenWindow
+        self.onDropFiles = onDropFiles
+        self.onDropText = onDropText
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.menu = NSMenu()
 
         buildMenu()
         configureButton()
+        configureDropTarget()
         updateAppearance()
     }
 
@@ -54,6 +62,22 @@ final class StatusItemController {
         button.action = #selector(handleClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.setAccessibilityLabel("Peek")
+    }
+
+    /// Lays a transparent drop target over the button.
+    ///
+    /// `NSStatusBarButton` is created by the system and cannot be subclassed
+    /// to override `NSDraggingDestination`, so the drop handling is a sibling
+    /// view that passes clicks through.
+    private func configureDropTarget() {
+        guard let button = statusItem.button else { return }
+
+        let drop = StatusItemDropView(frame: button.bounds)
+        drop.autoresizingMask = [.width, .height]
+        drop.onDropFiles = { [weak self] urls in self?.onDropFiles(urls) }
+        drop.onDropText = { [weak self] text in self?.onDropText(text) }
+        button.addSubview(drop)
+        dropView = drop
     }
 
     private func buildMenu() {

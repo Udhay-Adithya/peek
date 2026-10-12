@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-12
+
+### Added
+
+- **Drop a file on the menu bar icon.** Images and PDFs become attachments,
+  text files and dragged text become context, and the panel opens ready for
+  your question. A PDF with a text layer is read as text; a scanned one has its
+  first page rendered instead, so something still arrives.
+- Oversized and unsupported files are refused with a reason rather than
+  silently ignored.
+
+### Changed
+
+- Screen captures and dropped images now share one encoder, so both obey the
+  same size limit. A dropped image is downscaled before sending just as a
+  screenshot is.
+
 ## [0.6.0] - 2026-10-12
 
 ### Added
@@ -154,7 +171,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Udhay-Adithya/peek/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...v0.4.1

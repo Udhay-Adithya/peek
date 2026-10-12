@@ -424,6 +424,41 @@ final class PanelViewModel {
         contextDismissed = true
     }
 
+    /// Accepts something dropped on the menu bar icon.
+    ///
+    /// Text becomes context, as though it had been selected; an image becomes
+    /// an attachment. Either way the user still types the question — a drop
+    /// says what to talk about, not what to ask.
+    func acceptDrop(_ payload: DroppedItemReader.Payload) {
+        captureTask?.cancel()
+        isCapturing = false
+        contextDismissed = false
+        recognizedFromScreen = false
+
+        switch payload {
+        case .text(let text, let sourceName):
+            guard let sanitized = CapturePolicy().sanitize(text) else {
+                selection = .empty(appName: sourceName)
+                return
+            }
+            selection = .captured(SelectionContext(
+                text: sanitized.text,
+                sourceAppName: sourceName,
+                sourceBundleID: nil,
+                selectionBounds: nil,
+                wasTruncated: sanitized.wasTruncated
+            ))
+
+        case .image(let attachment, _):
+            appendAttachment(attachment)
+        }
+    }
+
+    /// Reports a drop Peek could not use.
+    func reportDropFailure(_ message: String) {
+        screenshotError = message
+    }
+
     /// Accepts a selection handed over by the Services menu.
     ///
     /// Bypasses Accessibility entirely: macOS already supplied the text, so any
