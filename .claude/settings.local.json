@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodegen generate *)",
+      "Bash(xcodebuild -project Peek.xcodeproj -scheme Peek -configuration Debug build)",
+      "Bash(codesign -dv \"/Users/udhayxd/Library/Developer/Xcode/DerivedData/Peek-adxipovbczhdmwhdlryipprmnigr/Build/Products/Debug/Peek.app\")",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'docs: reposition as a Look Up replacement, adopt Keep a Changelog, add CI' --body ' *)",
+      "Bash(gh pr *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(IF=\"/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/Library/Frameworks/Vision.framework/Versions/A/Modules/Vision.swiftmodule/arm64e-apple-ios-macabi.swiftinterface\"; echo \"=== RecognizeTextRequest Result + init ===\"; sed -n '2614,2660p' \"$IF\" | grep -E \"typealias Result|public init|RecognitionLevel|case \"; echo \"=== RecognizedText members ===\"; sed -n '1842,1860p' \"$IF\" | grep -E \"public var|public func\"; echo \"=== NormalizedRect accessors ===\"; grep -nE \"public struct NormalizedRect\" \"$IF\" | head -2; grep -nE \"public var \\(origin|cx|cy|width|height|midY|maxY\\)\" \"$IF\" | head -8)",
+      "Bash(xcodebuild test *)",
+      "Bash(pkill -f \"Peek.app/Contents/MacOS/Peek\")",
+      "Bash(open \"/Users/udhayxd/Library/Developer/Xcode/DerivedData/Peek-adxipovbczhdmwhdlryipprmnigr/Build/Products/Debug/Peek.app\")"
+    ]
+  }
+}

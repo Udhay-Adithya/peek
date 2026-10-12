@@ -67,17 +67,38 @@ fi
 #
 # codesign contacts it for every signature, and without it the archive fails
 # several minutes in with "A timestamp was expected but was not found" — a
-# message that says nothing about the actual cause. Notarization requires a
-# timestamped signature, so there is no point proceeding without it.
-if ! nc -z -G 8 timestamp.apple.com 443 >/dev/null 2>&1; then
-  fail "Cannot reach Apple's timestamp service (timestamp.apple.com:443).
+# message that names a symptom and not a cause.
+#
+# Probed by actually signing a throwaway file, because nothing simpler is
+# truthful. A TCP check is worse than useless here: RFC 3161 timestamping runs
+# over plain HTTP on port 80, so probing 443 reports failure on networks where
+# signing works perfectly — which is exactly the false negative this check
+# shipped with until it was caught.
+TIMESTAMP_PROBE="$BUILD_DIR/.timestamp-probe"
+mkdir -p "$BUILD_DIR"
+cp /usr/bin/true "$TIMESTAMP_PROBE"
 
-Every signature needs a secure timestamp and notarization requires one, so the
-build would fail partway through with an unhelpful error.
+codesign --force --sign "Developer ID Application" -o runtime \
+  --timestamp "$TIMESTAMP_PROBE" >/dev/null 2>&1 || true
 
-This is a network problem, not a configuration one. Try another network — a
-phone hotspot is usually enough to confirm it."
-fi
+PROBE_INFO=$(codesign -dvv "$TIMESTAMP_PROBE" 2>&1 || true)
+rm -f "$TIMESTAMP_PROBE"
+
+case "$PROBE_INFO" in
+  *"Timestamp="*)
+    echo "secure timestamp: available"
+    ;;
+  *)
+    fail "codesign cannot obtain a secure timestamp from Apple.
+
+Notarization requires one, so the build would fail partway through with
+\"A timestamp was expected but was not found\".
+
+The service is reached over HTTP on port 80 (not 443), at timestamp.apple.com.
+This is a network problem rather than a configuration one — try another
+network, such as a phone hotspot, to confirm."
+    ;;
+esac
 
 # Distinguishes a missing profile from an unreachable Apple, because
 # `notarytool history` is a network call and its failure otherwise reads as
