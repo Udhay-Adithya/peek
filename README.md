@@ -100,6 +100,9 @@ Peek never reads from a deny-listed app, and never from a secure text field.
 - **Diagnostics are redacted by construction** — outcomes, byte counts and
   accessibility roles are recorded; conversation content, selections and images
   are not.
+- Conversations are indexed into Spotlight so you can find them with ⌘Space.
+  That is a local, account-protected index, screenshots are never added to it,
+  and turning the setting off purges what Peek has written.
 - Conversations are stored unencrypted at
   `~/Library/Application Support/Peek/Conversations.store`. Deleting that file
   removes all history.

@@ -35,6 +35,8 @@ final class AssistantSession {
 
     private let engine: any ProviderResolving
     private let store: ConversationStore
+    /// Optional so a session can run without touching Spotlight at all.
+    private let indexer: ConversationIndexer?
     private var streamTask: Task<Void, Never>?
 
     /// The conversation being written to. Created lazily on first send, so
@@ -49,9 +51,12 @@ final class AssistantSession {
 
     private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "assistant")
 
-    init(engine: any ProviderResolving, store: ConversationStore) {
+    init(engine: any ProviderResolving,
+         store: ConversationStore,
+         indexer: ConversationIndexer? = nil) {
         self.engine = engine
         self.store = store
+        self.indexer = indexer
     }
 
     var isEmpty: Bool { messages.isEmpty }
@@ -187,6 +192,16 @@ final class AssistantSession {
                     self.conversationID = id
                 }
                 try await store.appendMessage(message, to: id)
+
+                // Re-indexed after each turn rather than on a timer: a
+                // conversation is most likely to be searched for soon after
+                // it happens.
+                if let indexer = self.indexer,
+                   let summary = try await store.recentConversations(limit: 50)
+                       .first(where: { $0.id == id }) {
+                    let messages = try await store.messages(in: id)
+                    await indexer.index(conversation: summary, messages: messages)
+                }
             } catch {
                 // Persistence must never break a live conversation.
                 Self.logger.error("failed to persist message")

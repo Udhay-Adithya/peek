@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
+### Added
+
+- **Find past conversations in Spotlight.** Answers you got weeks ago are now
+  searchable with ⌘Space, and opening a result brings that conversation up in
+  Peek. The text you asked *about* is indexed alongside what you typed, so
+  searching for the phrase you looked up works as well as searching for your
+  question.
+- A Spotlight setting to turn this off. Doing so removes everything Peek has
+  added to the index, rather than merely stopping new additions.
+
+### Security
+
+- Screenshots are never indexed — only a count of them. The text of a
+  conversation goes into the local, account-protected system index; the image
+  bytes do not.
+
 ## [0.4.1] - 2026-10-12
 
 ### Fixed
@@ -124,7 +142,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...v0.3.0

@@ -223,6 +223,13 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Spotlight") {
+                Toggle("Find conversations in Spotlight", isOn: $settings.spotlightIndexingEnabled)
+                Text("Lets you search past answers with \u{2318}Space instead of only inside Peek. Titles and message text are indexed locally; screenshots never are. Turning this off removes everything Peek has added to the index.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Behaviour") {
                 Toggle("Send automatically when invoked with a selection", isOn: $settings.autoSendOnInvoke)
                 Text("Off by default. When on, every invocation spends tokens and sends your selection to the provider — including accidental ones.")

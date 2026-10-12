@@ -14,8 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings: AppSettings?
     private var engine: AssistantEngine?
     private var router: MainWindowRouter?
+    private var session: AssistantSession?
+    private var history: HistoryViewModel?
     private var services: ServicesProvider?
     private var frontmostTracker: FrontmostAppTracker?
+    private var indexer: ConversationIndexer?
+    private var conversationStore: ConversationStore?
     private var mainWindow: MainWindowController?
     private var updates: UpdateController?
     private var forceClick: ForceClickTrigger?
@@ -45,8 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = PerformanceHarness.phase("SwiftData container") { Self.makeStore() }
         // Session and history live here, not in a view model: the panel and the
         // expanded window are two views onto one conversation.
-        let session = AssistantSession(engine: engine, store: store)
-        let history = HistoryViewModel(store: store)
+        let indexer = ConversationIndexer(isEnabled: settings.spotlightIndexingEnabled)
+        self.indexer = indexer
+        self.conversationStore = store
+
+        let session = AssistantSession(engine: engine, store: store, indexer: indexer)
+        let history = HistoryViewModel(store: store, indexer: indexer)
         let usage = UsageStatisticsViewModel(store: store)
         let updates = UpdateController()
         self.updates = updates
@@ -61,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                    engine: engine))
         }
         self.mainWindow = mainWindow
+
+        self.session = session
+        self.history = history
 
         let viewModel = PanelViewModel(settings: settings,
                                        engine: engine,
@@ -128,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { _ in
             MainActor.assumeIsolated {
                 Self.syncForceClick(forceClick, enabled: settings.forceClickEnabled)
+                indexer.setEnabled(settings.spotlightIndexingEnabled, store: store)
             }
         }
 
@@ -220,6 +232,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fatalError("SwiftData could not create even an in-memory container")
             }
         }
+    }
+
+    /// Opens the conversation chosen from a Spotlight result.
+    func application(_ application: NSApplication,
+                     continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        guard let id = ConversationIndexer.conversationID(from: userActivity) else { return false }
+
+        // The window rather than the panel: arriving from a search means
+        // reading, which the panel is the wrong size for.
+        router?.pane = .conversations
+        mainWindow?.show()
+        Task { [weak self] in await self?.openConversation(id) }
+        return true
+    }
+
+    private func openConversation(_ id: ConversationID) async {
+        await session?.load(id)
+        history?.refresh()
     }
 
     /// Target for the "Check for Updates…" menu item.
