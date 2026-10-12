@@ -124,14 +124,18 @@ final class RewriteViewModel {
 
     func replace() {
         guard canReplace else { return }
-        do {
-            let route = try writer.replaceSelection(with: proposed, in: frontApp)
-            phase = .replaced(via: route)
-            Self.logger.debug("rewrite applied via \(String(describing: route), privacy: .public)")
-        } catch {
-            let message = (error as? SelectionWriter.Failure)?.errorDescription
-                ?? error.localizedDescription
-            phase = .failed(message)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let route = try await self.writer.replaceSelection(with: self.proposed,
+                                                                   in: self.frontApp)
+                self.phase = .replaced(via: route)
+                Self.logger.info("rewrite applied via \(String(describing: route), privacy: .public)")
+            } catch {
+                let message = (error as? SelectionWriter.Failure)?.errorDescription
+                    ?? error.localizedDescription
+                self.phase = .failed(message)
+            }
         }
     }
 

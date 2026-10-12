@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-12
+
+### Fixed
+
+- **Replace now works.** Rewriting a selection writes the result back into the
+  app you were using, rather than appearing to succeed and changing nothing.
+  Peek was writing while the source app was in the background, where a paste is
+  ignored and the text attribute is often read-only; the app is now brought
+  forward first. The 0.3.0 workaround of copying the result by hand is no
+  longer needed.
+- Diagnostics for write failures are now recorded at a level the system keeps,
+  so a future problem here can be diagnosed from the log instead of guessed at.
+
 ## [0.4.0] - 2026-10-12
 
 ### Added
@@ -111,7 +124,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Udhay-Adithya/peek/compare/v0.1.0...v0.2.0
