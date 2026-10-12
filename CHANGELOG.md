@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
+### Added
+
+- **Shortcuts, Spotlight and Siri support.** *Ask Peek* is now an action you can
+  use in Shortcuts, run from Spotlight, or say to Siri. It takes a question and
+  returns the answer as text, so it can feed the next step of a shortcut rather
+  than just opening a window.
+- *Show Peek* opens the floating panel from a shortcut — useful as the last
+  step of an automation that has gathered context and wants you to take over.
+- Questions asked this way are saved to your history like any other
+  conversation, labelled as coming from Shortcuts.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
@@ -98,7 +111,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Udhay-Adithya/peek/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Udhay-Adithya/peek/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Udhay-Adithya/peek/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Udhay-Adithya/peek/releases/tag/v0.1.0

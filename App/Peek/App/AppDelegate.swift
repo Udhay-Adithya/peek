@@ -131,6 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // App Intents are instantiated by the system, so the services they
+        // need are registered here rather than injected.
+        IntentServices.configure(
+            engine: engine,
+            store: store,
+            showPanel: { [weak panel] in panel?.show() }
+        )
+
         // "Ask Peek" in every app's Services menu — no permissions required.
         let frontmostTracker = FrontmostAppTracker()
         self.frontmostTracker = frontmostTracker
