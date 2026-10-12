@@ -16,13 +16,15 @@ final class HistoryViewModel {
     }
 
     private let store: ConversationStore
+    private let indexer: ConversationIndexer?
     private var searchTask: Task<Void, Never>?
 
     private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "history")
     private static let pageSize = 50
 
-    init(store: ConversationStore) {
+    init(store: ConversationStore, indexer: ConversationIndexer? = nil) {
         self.store = store
+        self.indexer = indexer
     }
 
     func refresh() {
@@ -59,9 +61,12 @@ final class HistoryViewModel {
         let store = self.store
         // Optimistic removal: the list should not lag behind the click.
         conversations.removeAll { $0.id == id }
+        let indexer = self.indexer
         Task {
             do { try await store.deleteConversation(id) }
             catch { Self.logger.error("delete failed") }
+            // Deleting a conversation must leave nothing behind in Spotlight.
+            await indexer?.remove(id)
         }
     }
 

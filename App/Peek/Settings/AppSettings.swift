@@ -17,6 +17,7 @@ final class AppSettings {
         static let clipboardFallback = "capture.clipboardFallbackEnabled"
         static let continueRecent = "behaviour.continueRecentConversation"
         static let forceClick = "triggers.forceClickEnabled"
+        static let spotlight = "privacy.spotlightIndexingEnabled"
     }
 
     /// How recently a conversation must have been touched to be resumed.
@@ -50,6 +51,10 @@ final class AppSettings {
         // Off by default: it depends on a private framework and competes with
         // the system's own Look Up, so it is the user's decision to switch on.
         self.forceClickEnabled = defaults.object(forKey: Key.forceClick) as? Bool ?? false
+        // On by default, matching where Mail and Notes put their content: a
+        // local, account-protected index. Turning it off purges what Peek
+        // has written.
+        self.spotlightIndexingEnabled = defaults.object(forKey: Key.spotlight) as? Bool ?? true
     }
 
     var providerID: ProviderIdentifier {
@@ -70,6 +75,11 @@ final class AppSettings {
 
     var clipboardFallbackEnabled: Bool {
         didSet { defaults.set(clipboardFallbackEnabled, forKey: Key.clipboardFallback) }
+    }
+
+    /// Whether conversations are findable from Spotlight.
+    var spotlightIndexingEnabled: Bool {
+        didSet { defaults.set(spotlightIndexingEnabled, forKey: Key.spotlight) }
     }
 
     /// Whether Force Click invokes Peek.
