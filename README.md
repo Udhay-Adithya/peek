@@ -69,6 +69,7 @@ Prefer to keep Look Up? Leave Force Click off and use `⌃⌥Space`.
 | Menu bar | none | Left click opens, right click for the menu |
 | Shortcuts, Spotlight or Siri | none | *Ask Peek* returns the answer as text an automation can use |
 | Control Center | none | Pinnable to the menu-bar clock |
+| Drop a file on the menu bar | none | Images, PDFs and text files become context |
 | **Force Click** | Accessibility | Off by default — see [ADR 0001](docs/adr/0001-force-click-cannot-be-detected-globally.md) |
 
 Force Click is not reachable through any public macOS API, which

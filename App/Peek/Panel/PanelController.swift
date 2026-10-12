@@ -131,6 +131,36 @@ final class PanelController {
         viewModel.presentProvidedSelection(text: text, appName: appName)
     }
 
+    /// Shows the panel carrying something dropped on the menu bar.
+    func show(drop payload: DroppedItemReader.Payload) {
+        positionAtPointer()
+        viewModel.prepareForInvocation()
+        panel.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
+        viewModel.acceptDrop(payload)
+    }
+
+    /// Shows the panel reporting a drop that could not be used.
+    func show(dropFailure message: String) {
+        positionAtPointer()
+        viewModel.prepareForInvocation()
+        panel.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
+        viewModel.reportDropFailure(message)
+    }
+
+    private func positionAtPointer() {
+        let screens = NSScreen.screens.map {
+            PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        }
+        let anchor = CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        if let placement = PanelPlacement.place(panelSize: panel.frame.size,
+                                                anchor: anchor,
+                                                screens: screens) {
+            panel.setFrameOrigin(placement.origin)
+        }
+    }
+
     /// Shows the panel with a rewrite of text supplied by the Services menu.
     ///
     /// Does not run context capture: the text is already in hand, and the

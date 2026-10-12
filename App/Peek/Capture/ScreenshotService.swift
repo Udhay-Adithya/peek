@@ -36,7 +36,6 @@ struct ScreenshotService {
     }
 
     private static let logger = Logger(subsystem: "com.udhayadithya.Peek", category: "screenshot")
-    private static let jpegQuality: CGFloat = 0.8
 
     /// Captures the display containing `point`, or the main display.
     func captureDisplay(containing point: CGPoint? = nil) async throws -> ImageAttachment {
@@ -67,7 +66,11 @@ struct ScreenshotService {
     private func capture(sourceRect: CGRect?, point: CGPoint?) async throws -> ImageAttachment {
         let image = try await captureImage(sourceRect: sourceRect, point: point, applyBudget: true)
 
-        guard let data = Self.encodeJPEG(image) else { throw Failure.encodingFailed }
+        // Shared with dropped images so both obey the same size budget.
+        guard let attachment = ImageEncoder.attachment(from: image) else {
+            throw Failure.encodingFailed
+        }
+        let data = attachment.data
 
         // Byte count only — never the image itself.
         Self.logger.debug("screenshot captured px=\(image.width, privacy: .public)x\(image.height, privacy: .public) bytes=\(data.count, privacy: .public)")
@@ -152,24 +155,6 @@ struct ScreenshotService {
                       y: frame.maxY - rect.maxY,
                       width: rect.width,
                       height: rect.height)
-    }
-
-    // MARK: - Encoding
-
-    /// JPEG rather than HEIC: universally accepted by model providers, where
-    /// HEIC support varies by vendor and would be a per-provider concern.
-    private static func encodeJPEG(_ image: CGImage) -> Data? {
-        let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            output, UTType.jpeg.identifier as CFString, 1, nil
-        ) else { return nil }
-
-        CGImageDestinationAddImage(destination, image, [
-            kCGImageDestinationLossyCompressionQuality: jpegQuality,
-        ] as CFDictionary)
-
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return output as Data
     }
 }
 

@@ -119,6 +119,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 router.pane = .conversations
                 mainWindow.show()
             },
+            onDropFiles: { [weak panel] urls in
+                Self.handleDrop(urls: urls, panel: panel)
+            },
+            onDropText: { [weak panel] text in
+                Self.handleDrop(text: text, panel: panel)
+            },
             onQuit: { NSApp.terminate(nil) }
         )
         self.statusItem = statusItem
@@ -206,6 +212,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Drops the Dock icon again once the last ordinary window closes.
     func applicationDidUpdate(_ notification: Notification) {
         mainWindow?.restoreAccessoryPolicyIfNeeded()
+    }
+
+    /// Reads a dropped file and opens the panel with it.
+    ///
+    /// Only the first item is used. A multi-file drop is ambiguous — Peek
+    /// cannot know whether they are meant to be compared, concatenated, or
+    /// asked about one at a time — and silently picking an order would be
+    /// worse than taking the one on top.
+    private static func handleDrop(urls: [URL], panel: PanelController?) {
+        guard let url = urls.first else { return }
+        let reader = DroppedItemReader()
+        do {
+            panel?.show(drop: try reader.read(fileAt: url))
+        } catch {
+            let message = (error as? DroppedItemReader.Failure)?.errorDescription
+                ?? error.localizedDescription
+            panel?.show(dropFailure: message)
+        }
+    }
+
+    private static func handleDrop(text: String, panel: PanelController?) {
+        let reader = DroppedItemReader()
+        do {
+            panel?.show(drop: try reader.read(text: text))
+        } catch {
+            let message = (error as? DroppedItemReader.Failure)?.errorDescription
+                ?? error.localizedDescription
+            panel?.show(dropFailure: message)
+        }
     }
 
     private static func syncForceClick(_ trigger: ForceClickTrigger, enabled: Bool) {
