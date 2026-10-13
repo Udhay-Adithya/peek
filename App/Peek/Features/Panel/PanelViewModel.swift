@@ -18,6 +18,15 @@ final class PanelViewModel {
 
     var prompt: String = ""
 
+    /// Mirrored from the dictation service so the composer can show it.
+    private(set) var dictationState: DictationState = .idle
+
+    /// What the composer held when dictation started.
+    ///
+    /// Recognised text is appended to this rather than replacing the field, so
+    /// starting to dictate after typing half a question keeps the half.
+    private var promptBeforeDictation = ""
+
     /// Pending screenshot attachments for the next turn.
     ///
     /// Only the encoded JPEG bytes plus a small preview are retained — never a
@@ -61,7 +70,9 @@ final class PanelViewModel {
     private let recognizer = VisionTextRecognizer()
     private let settings: AppSettings
     private let engine: any ProviderResolving
+    private let dictation: any DictationServing
     private var captureTask: Task<Void, Never>?
+    private var dictationTask: Task<Void, Never>?
 
     /// Invoked when the user asks for settings from inside the panel.
     var onOpenSettings: (() -> Void)?
@@ -115,7 +126,8 @@ final class PanelViewModel {
          session: AssistantSession,
          history: HistoryViewModel,
          capture: any SelectionCapturing = AccessibilitySelectionCapture(),
-         clipboardCapture: any ClipboardCapturing = ClipboardSelectionCapture()) {
+         clipboardCapture: any ClipboardCapturing = ClipboardSelectionCapture(),
+         dictation: any DictationServing = DictationService()) {
         self.settings = settings
         self.engine = engine
         self.store = store
@@ -123,6 +135,44 @@ final class PanelViewModel {
         self.clipboardCapture = clipboardCapture
         self.session = session
         self.history = history
+        self.dictation = dictation
+
+        dictation.onStateChange = { [weak self] state in
+            self?.dictationState = state
+        }
+        dictation.onTranscript = { [weak self] transcript in
+            guard let self, !transcript.isEmpty else { return }
+            let base = self.promptBeforeDictation
+            self.prompt = base.isEmpty ? transcript
+                : base.hasSuffix(" ") ? base + transcript
+                : base + " " + transcript
+        }
+    }
+
+    // MARK: - Dictation
+
+    var isDictating: Bool {
+        switch dictationState {
+        case .listening, .preparing: return true
+        case .idle, .failed: return false
+        }
+    }
+
+    /// Starts or stops dictation. Bound to one button, because that is one
+    /// affordance to the user.
+    func toggleDictation() {
+        guard !isDictating else {
+            stopDictation()
+            return
+        }
+        promptBeforeDictation = prompt
+        dictationTask = Task { [dictation] in await dictation.start() }
+    }
+
+    func stopDictation() {
+        dictationTask?.cancel()
+        dictationTask = nil
+        dictation.stop()
     }
 
     func expand() {
@@ -171,6 +221,7 @@ final class PanelViewModel {
         guard !session.isStreaming else { return }
         // A new assistant invocation supersedes any rewrite on screen.
         endRewrite()
+        stopDictation()
         session.reset()
         prompt = ""
         attachments.removeAll()
@@ -486,6 +537,9 @@ final class PanelViewModel {
 
     func send() {
         guard canSend, !session.isStreaming else { return }
+        // The question has been asked; the microphone has no further business
+        // being open.
+        stopDictation()
         let outgoing = prompt
         let outgoingAttachments = attachments.map(\.attachment)
         prompt = ""
@@ -497,6 +551,7 @@ final class PanelViewModel {
     }
 
     func newConversation() {
+        stopDictation()
         session.reset()
         didContinueConversation = false
         prompt = ""

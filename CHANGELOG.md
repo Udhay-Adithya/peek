@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-12
+
+### Added
+
+- **Dictate your question.** A microphone button in the composer turns what you
+  say into text, so you can ask without typing. It appends to whatever you had
+  already typed rather than replacing it, and the same button stops it.
+- Transcription uses Apple's on-device speech models, so dictated audio is
+  never recorded and never leaves your Mac. The model is downloaded once on
+  first use, and Peek says so while it waits rather than appearing to hang.
+- Refusing the microphone, or dictating in a language the models do not cover,
+  says so and leaves typing entirely unaffected.
+- Dictation works on a Mac whose language and region disagree — US English set
+  in India, for instance — where the system's own locale identifier matches
+  nothing in the recogniser's list of supported languages.
+
 ## [0.7.0] - 2026-10-12
 
 ### Added
@@ -171,7 +187,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Udhay-Adithya/peek/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Udhay-Adithya/peek/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Udhay-Adithya/peek/compare/v0.4.1...v0.5.0

@@ -25,6 +25,7 @@ leaves the machine — and can use a cloud provider when you want a larger model
 | Works in | apps that expose text to the system | the same, plus a clipboard fallback for Electron and Firefox-based apps |
 | Changes your text | no | fix grammar, improve writing, make it shorter |
 | Screenshots | no | attach a region or the whole screen |
+| Asking out loud | no | dictate your question, transcribed on-device |
 | History | none | searchable and persistent |
 | Invoked by | Force Click | Force Click, a global shortcut, the Services menu, or the menu bar |
 
@@ -95,6 +96,8 @@ Peek never reads from a deny-listed app, and never from a secure text field.
 
 - **On-device by default.** Apple Intelligence runs locally; nothing is sent
   anywhere unless you choose a cloud provider.
+- **Dictation never leaves your Mac.** Speech is transcribed by Apple's
+  on-device models; no audio is recorded, stored or uploaded.
 - **API keys live in the Keychain** — never in preferences, never on disk in
   plain text, never in logs. Settings only ever shows a masked value.
 - **No telemetry.** Selected text and screenshots go to the provider you
