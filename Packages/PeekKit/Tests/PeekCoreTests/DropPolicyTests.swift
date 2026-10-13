@@ -78,4 +78,22 @@ struct DropPolicyTests {
             .contains("too large") == true)
         #expect(DropPolicy.refusalReason(kind: .image, byteCount: 1_000) == nil)
     }
+
+    @Test("an empty file is called empty, whatever its kind")
+    func emptyFileReason() {
+        // A `where` clause that bound only to the second pattern made `.image`
+        // match unconditionally, so a 0-byte image was refused as "too large".
+        for kind in [DropPolicy.Kind.image, .pdf, .text] {
+            #expect(DropPolicy.refusalReason(kind: kind, byteCount: 0) == "That file is empty.",
+                    "wrong reason for an empty \(kind)")
+        }
+    }
+
+    @Test("an oversized file of either kind is called too large")
+    func oversizedReason() {
+        #expect(DropPolicy.refusalReason(kind: .image, byteCount: DropPolicy.maxImageFileBytes + 1)
+                == "That file is too large to open.")
+        #expect(DropPolicy.refusalReason(kind: .pdf, byteCount: DropPolicy.maxImageFileBytes + 1)
+                == "That file is too large to open.")
+    }
 }

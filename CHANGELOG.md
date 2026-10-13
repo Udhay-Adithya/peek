@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dropping an empty file on the menu bar now says it is empty, instead of
+  claiming an image is too large to open.
+
 ## [0.8.0] - 2026-10-12
 
 ### Added
