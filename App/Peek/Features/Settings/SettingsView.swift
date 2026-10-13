@@ -230,6 +230,19 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Tools") {
+                Toggle("Let the assistant use tools", isOn: $settings.toolsEnabled)
+                Text("Lets the assistant look things up instead of answering only from what it was given. It says in the transcript whenever it uses one. Not available with Apple Intelligence yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Allow fetching web pages", isOn: $settings.webFetchToolEnabled)
+                    .disabled(!settings.toolsEnabled)
+                Text("Off by default, and the only setting here that sends anything outward on the assistant's initiative rather than yours. When on, it may fetch an https page it chose itself and read the text. Local and private addresses \u{2014} your router, a dev server, anything on this Mac \u{2014} are never fetched.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Behaviour") {
                 Toggle("Send automatically when invoked with a selection", isOn: $settings.autoSendOnInvoke)
                 Text("Off by default. When on, every invocation spends tokens and sends your selection to the provider — including accidental ones.")
