@@ -217,9 +217,14 @@ struct PanelRootView: View {
             HStack(spacing: 5) {
                 Image(systemName: "exclamationmark.triangle").imageScale(.small)
                 Text(message).font(.system(size: 10))
-                Button("Open Settings") { MicrophonePermission.openSettings() }
-                    .buttonStyle(.link)
-                    .font(.system(size: 10))
+                // Only for a permission problem. An unsupported language or a
+                // failed model download is not fixed in Privacy settings, and
+                // sending the user there would be a dead end.
+                if !MicrophonePermission.isGranted {
+                    Button("Open Settings") { MicrophonePermission.openSettings() }
+                        .buttonStyle(.link)
+                        .font(.system(size: 10))
+                }
             }
             .foregroundStyle(.orange)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -55,12 +55,12 @@ final class DictationService: DictationServing {
     private var inputStream: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
 
-    /// There is deliberately no `deinit` teardown. An `isolated deinit` plants
-    /// an executor assertion in a function ARC may run from any thread — the
-    /// same trap that the audio tap hit — and it buys nothing here: every
-    /// user-visible path calls ``stop()``, and releasing `engine` closes the
-    /// microphone regardless.
-    ///
+    // There is deliberately no `deinit` teardown. An `isolated deinit` plants
+    // an executor assertion in a function ARC may run from any thread — the
+    // same trap the audio tap hit — and it buys nothing here: every
+    // user-visible path calls `stop()`, and releasing `engine` closes the
+    // microphone regardless.
+
     /// Text accumulated across finalized segments.
     ///
     /// Progressive results replace the volatile tail repeatedly, so finalized

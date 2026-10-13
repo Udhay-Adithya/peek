@@ -18,8 +18,7 @@ import Foundation
 struct DictationServiceLiveTests {
 
     nonisolated private static var canRecord: Bool {
-        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-            && AVCaptureDevice.default(for: .audio) != nil
+        MicrophonePermission.isGranted && AVCaptureDevice.default(for: .audio) != nil
     }
 
     @Test("starting dictation survives real microphone buffers",
