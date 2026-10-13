@@ -25,6 +25,21 @@ final class AssistantSession {
         /// Reported by the provider, where it does. Shown so cost is visible
         /// rather than something the user discovers on a bill.
         var usage: TokenUsage?
+        /// Tools the model used for this turn, in the order it called them.
+        ///
+        /// Shown rather than kept internal: an answer that came from searching
+        /// the user's own history, or from fetching a page over the network,
+        /// is a different thing from an answer the model simply knew, and the
+        /// user is entitled to see which they got.
+        var toolUses: [ToolUse] = []
+    }
+
+    /// One tool invocation, described for the transcript.
+    struct ToolUse: Identifiable, Sendable, Equatable {
+        let id = UUID()
+        let name: String
+        /// A short phrase naming what was done, in the user's terms.
+        let summary: String
     }
 
     private(set) var messages: [DisplayMessage] = []
@@ -240,6 +255,8 @@ final class AssistantSession {
                     switch event {
                     case .textDelta, .textSnapshot:
                         self?.updateStreamingText(id: streamID, to: accumulator.text)
+                    case .toolCall(let call):
+                        self?.noteToolUse(id: streamID, call: call)
                     default:
                         break
                     }
@@ -251,6 +268,44 @@ final class AssistantSession {
                 self?.failStream(id: streamID, with: error)
             }
         }
+    }
+
+    /// Records a tool call against the streaming message.
+    private func noteToolUse(id: UUID, call: ToolCall) {
+        guard let index = index(of: id) else { return }
+        messages[index].toolUses.append(
+            ToolUse(name: call.name, summary: Self.describe(call))
+        )
+    }
+
+    /// Describes a call in the user's terms rather than the model's.
+    ///
+    /// The host is named for a web fetch, because *which* page was fetched is
+    /// the part with privacy consequence. The full URL is deliberately not
+    /// shown: a model-chosen URL can carry a long query string that would
+    /// crowd out the answer in a 440pt panel.
+    private static func describe(_ call: ToolCall) -> String {
+        switch call.name {
+        case PeekToolExecutor.searchConversations.name:
+            if let query = Self.argument("query", from: call), !query.isEmpty {
+                return "Searched your conversations for \u{201C}\(query)\u{201D}"
+            }
+            return "Searched your conversations"
+        case PeekToolExecutor.fetchWebPage.name:
+            if let raw = Self.argument("url", from: call),
+               let host = URL(string: raw)?.host() {
+                return "Fetched \(host)"
+            }
+            return "Fetched a web page"
+        default:
+            return "Used \(call.name)"
+        }
+    }
+
+    private static func argument(_ name: String, from call: ToolCall) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: call.arguments),
+              let dictionary = object as? [String: Any] else { return nil }
+        return dictionary[name] as? String
     }
 
     private func index(of id: UUID) -> Int? {

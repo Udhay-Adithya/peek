@@ -64,6 +64,20 @@ struct MessageRow: View {
 
     @ViewBuilder
     private var assistantBody: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            // Above the answer and outside every branch below: a tool runs
+            // before the first token, which is exactly when the message is
+            // otherwise just a spinner and the user has no idea why it is
+            // taking longer than usual.
+            ForEach(message.toolUses) { use in
+                ToolUseChip(use: use)
+            }
+            assistantContent
+        }
+    }
+
+    @ViewBuilder
+    private var assistantContent: some View {
         if let failure = message.failure {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {
@@ -108,3 +122,35 @@ struct MessageRow: View {
     }
 }
 
+
+/// A line saying the assistant used a tool.
+///
+/// Shown for every call, including ones that failed: "it searched and found
+/// nothing" and "it never looked" are different answers to the same question,
+/// and only one of them is the model's fault.
+private struct ToolUseChip: View {
+    let use: AssistantSession.ToolUse
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: glyph)
+                .imageScale(.small)
+            Text(use.summary)
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(.quaternary.opacity(0.4), in: Capsule())
+        .accessibilityLabel(use.summary)
+    }
+
+    /// A globe for anything that left the machine, a magnifying glass for
+    /// anything local. The distinction is the one with privacy consequence, so
+    /// it is the one the icon carries.
+    private var glyph: String {
+        use.name == PeekToolExecutor.fetchWebPage.name ? "globe" : "magnifyingglass"
+    }
+}
