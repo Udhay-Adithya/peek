@@ -12,17 +12,22 @@ public struct AssistantRequest: Sendable, Equatable {
     public var messages: [ChatMessage]
     public var temperature: Double?
     public var maxOutputTokens: Int?
+    /// Tools offered to the model for this turn. Empty means none, which is
+    /// how a provider that cannot call tools is asked for an ordinary answer.
+    public var tools: [ToolDefinition]
 
     public init(model: String,
                 systemInstruction: String? = nil,
                 messages: [ChatMessage],
                 temperature: Double? = nil,
-                maxOutputTokens: Int? = nil) {
+                maxOutputTokens: Int? = nil,
+                tools: [ToolDefinition] = []) {
         self.model = model
         self.systemInstruction = systemInstruction
         self.messages = messages
         self.temperature = temperature
         self.maxOutputTokens = maxOutputTokens
+        self.tools = tools
     }
 }
 
@@ -57,6 +62,11 @@ public struct ChatMessage: Sendable, Equatable {
 public enum ContentPart: Sendable, Equatable {
     case text(String)
     case image(ImageAttachment)
+    /// A tool call the model made, replayed so the next request carries the
+    /// same history the model produced.
+    case toolCall(ToolCall)
+    /// The outcome of running that call.
+    case toolResult(ToolResult)
 }
 
 /// An image supplied as conversation context.

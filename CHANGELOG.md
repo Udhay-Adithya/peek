@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-13
+
+### Added
+
+- **The assistant can look things up.** It can search your own past Peek
+  conversations when you refer to something you asked before, and — if you
+  allow it — fetch a web page you ask about. Previously it could only answer
+  from what you handed it.
+- Every tool use is shown in the transcript, above the answer: a globe for
+  anything that went out to the network, a magnifying glass for anything that
+  stayed on your Mac. An answer that came from looking something up is a
+  different thing from one the model simply knew.
+- A **Tools** section in Settings. Fetching web pages is **off by default** and
+  has its own switch, because it is the only thing in Peek that sends data
+  outward on the assistant's initiative rather than yours.
+
+### Security
+
+- A web address the assistant chose is checked before anything is fetched:
+  https only, and never a local or private address. Your router, a dev server
+  and anything listening on this Mac are unreachable by this tool, so a page or
+  document that tries to talk the assistant into fetching them cannot.
+- A URL containing a username or password is refused rather than sent onward.
+- A tool that is switched off cannot run even if the model asks for it by name.
+
 ### Fixed
 
 - Dropping an empty file on the menu bar now says it is empty, instead of
@@ -192,7 +217,8 @@ First release.
 - No telemetry. Selected text and screenshots reach only the provider the user
   configured.
 
-[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Udhay-Adithya/peek/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Udhay-Adithya/peek/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Udhay-Adithya/peek/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Udhay-Adithya/peek/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Udhay-Adithya/peek/compare/v0.5.0...v0.6.0

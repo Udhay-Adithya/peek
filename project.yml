@@ -9,8 +9,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.8.0"
-    CURRENT_PROJECT_VERSION: "9"
+    MARKETING_VERSION: "0.9.0"
+    CURRENT_PROJECT_VERSION: "10"
     # The team that publishes the notarized releases. Not a secret: a team ID
     # is embedded in every signed binary and readable with `codesign -dv` on
     # any published build. Contributors signing locally should override it in

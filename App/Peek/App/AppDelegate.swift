@@ -40,13 +40,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // constructing an NSPanel plus its SwiftUI hosting view on demand costs
         // far more than positioning and ordering an existing one.
         let settings = PerformanceHarness.phase("AppSettings") { AppSettings() }
-        let engine = PerformanceHarness.phase("AssistantEngine") { AssistantEngine(settings: settings) }
+        // Built before the engine, which needs it for the conversation-search
+        // tool.
+        let store = PerformanceHarness.phase("SwiftData container") { Self.makeStore() }
+        let engine = PerformanceHarness.phase("AssistantEngine") {
+            AssistantEngine(settings: settings, store: store)
+        }
         let router = MainWindowRouter()
         self.settings = settings
         self.engine = engine
         self.router = router
-
-        let store = PerformanceHarness.phase("SwiftData container") { Self.makeStore() }
         // Session and history live here, not in a view model: the panel and the
         // expanded window are two views onto one conversation.
         let indexer = ConversationIndexer(isEnabled: settings.spotlightIndexingEnabled)

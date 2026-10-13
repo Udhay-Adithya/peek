@@ -18,6 +18,8 @@ final class AppSettings {
         static let continueRecent = "behaviour.continueRecentConversation"
         static let forceClick = "triggers.forceClickEnabled"
         static let spotlight = "privacy.spotlightIndexingEnabled"
+        static let tools = "tools.enabled"
+        static let webFetchTool = "tools.webFetchEnabled"
     }
 
     /// How recently a conversation must have been touched to be resumed.
@@ -55,6 +57,14 @@ final class AppSettings {
         // local, account-protected index. Turning it off purges what Peek
         // has written.
         self.spotlightIndexingEnabled = defaults.object(forKey: Key.spotlight) as? Bool ?? true
+        // On by default, but the only tool it enables is local: searching your
+        // own past conversations sends nothing anywhere.
+        self.toolsEnabled = defaults.object(forKey: Key.tools) as? Bool ?? true
+        // Off by default, and deliberately separate. Every other path in Peek
+        // sends data outward only because the user chose a cloud provider;
+        // this one would do it on the model's initiative, to an address the
+        // model picked. That is a different decision and gets its own switch.
+        self.webFetchToolEnabled = defaults.object(forKey: Key.webFetchTool) as? Bool ?? false
     }
 
     var providerID: ProviderIdentifier {
@@ -90,5 +100,15 @@ final class AppSettings {
     /// Whether invoking from the same app shortly after continues that thread.
     var continueRecentConversation: Bool {
         didSet { defaults.set(continueRecentConversation, forKey: Key.continueRecent) }
+    }
+
+    /// Whether the assistant may use tools at all.
+    var toolsEnabled: Bool {
+        didSet { defaults.set(toolsEnabled, forKey: Key.tools) }
+    }
+
+    /// Whether the assistant may fetch a web page it chose itself.
+    var webFetchToolEnabled: Bool {
+        didSet { defaults.set(webFetchToolEnabled, forKey: Key.webFetchTool) }
     }
 }

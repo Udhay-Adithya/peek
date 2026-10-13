@@ -336,3 +336,209 @@ struct GeminiProviderRobustnessTests {
         #expect(events == [.finished(.stop)])
     }
 }
+
+// MARK: - Tool calling
+
+extension GeminiProviderTests {
+
+    private static let weather = ToolDefinition(
+        name: "get_weather",
+        description: "Current weather for a city.",
+        parameters: [
+            ToolParameter(name: "city", description: "City name", kind: .string, isRequired: true),
+            ToolParameter(name: "days", description: "Forecast length", kind: .integer, isRequired: false),
+        ],
+        leavesTheMachine: true
+    )
+
+    /// The request body as JSON, for asserting on the wire format rather than
+    /// on our own encoder types.
+    private func sentBody(_ recorder: RequestRecorder) async throws -> [String: Any] {
+        let sent = try #require(await recorder.request)
+        let body = try #require(sent.body)
+        let object = try JSONSerialization.jsonObject(with: body)
+        return try #require(object as? [String: Any])
+    }
+
+    @Test("declares tools as functionDeclarations with a JSON Schema")
+    func declaresTools() async throws {
+        let recorder = RequestRecorder()
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ], recorder: recorder)
+
+        _ = try await collect(GeminiProvider(apiKey: key, client: client),
+                              request: AssistantRequest(model: "gemini-2.5-flash",
+                                                        messages: [ChatMessage(role: .user, text: "hi")],
+                                                        tools: [Self.weather]))
+
+        let json = try await sentBody(recorder)
+        let tools = try #require(json["tools"] as? [[String: Any]])
+        let declarations = try #require(tools.first?["functionDeclarations"] as? [[String: Any]])
+        #expect(declarations.count == 1)
+        #expect(declarations[0]["name"] as? String == "get_weather")
+
+        let schema = try #require(declarations[0]["parameters"] as? [String: Any])
+        #expect(schema["type"] as? String == "object")
+        let properties = try #require(schema["properties"] as? [String: Any])
+        #expect(Set(properties.keys) == ["city", "days"])
+        let city = try #require(properties["city"] as? [String: Any])
+        #expect(city["type"] as? String == "string")
+        // Only the required ones, and the optional one must not appear.
+        #expect(schema["required"] as? [String] == ["city"])
+    }
+
+    @Test("omits tools entirely when none are offered")
+    func omitsToolsWhenEmpty() async throws {
+        let recorder = RequestRecorder()
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ], recorder: recorder)
+
+        _ = try await collect(GeminiProvider(apiKey: key, client: client))
+
+        // An empty `tools` array is not the same request as sending none.
+        let json = try await sentBody(recorder)
+        #expect(json["tools"] == nil)
+    }
+
+    @Test("omits `required` rather than sending an empty array")
+    func omitsEmptyRequired() async throws {
+        let recorder = RequestRecorder()
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ], recorder: recorder)
+        let optionalOnly = ToolDefinition(
+            name: "ping", description: "ping", parameters: [
+                ToolParameter(name: "note", description: "note", kind: .string, isRequired: false),
+            ], leavesTheMachine: false)
+
+        _ = try await collect(GeminiProvider(apiKey: key, client: client),
+                              request: AssistantRequest(model: "m",
+                                                        messages: [ChatMessage(role: .user, text: "hi")],
+                                                        tools: [optionalOnly]))
+
+        let json = try await sentBody(recorder)
+        let tools = try #require(json["tools"] as? [[String: Any]])
+        let declarations = try #require(tools.first?["functionDeclarations"] as? [[String: Any]])
+        let schema = try #require(declarations[0]["parameters"] as? [String: Any])
+        #expect(schema["required"] == nil)
+    }
+
+    @Test("decodes a functionCall part into a tool call event")
+    func decodesFunctionCall() async throws {
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"content":{"parts":[{"functionCall":{"id":"call-1","name":"get_weather","args":{"city":"Paris"}}}],"role":"model"}}],"responseId":"r1"}"#, "",
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ])
+
+        let events = try await collect(GeminiProvider(apiKey: key, client: client))
+
+        let calls = events.compactMap { event -> ToolCall? in
+            if case .toolCall(let call) = event { return call }
+            return nil
+        }
+        #expect(calls.count == 1)
+        #expect(calls.first?.id == "call-1")
+        #expect(calls.first?.name == "get_weather")
+        // Arguments stay raw for the tool that owns the schema to decode.
+        let rawArguments = try #require(calls.first?.arguments)
+        let decodedArguments = try JSONSerialization.jsonObject(with: rawArguments)
+        let args = try #require(decodedArguments as? [String: Any])
+        #expect(args["city"] as? String == "Paris")
+    }
+
+    @Test("a missing call id decodes as empty rather than failing")
+    func decodesFunctionCallWithoutID() async throws {
+        // Observed on some models: the id is simply absent.
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{}}}],"role":"model"}}]}"#, "",
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ])
+
+        let events = try await collect(GeminiProvider(apiKey: key, client: client))
+        let calls = events.compactMap { event -> ToolCall? in
+            if case .toolCall(let call) = event { return call }
+            return nil
+        }
+        #expect(calls.first?.id == "")
+        #expect(calls.first?.name == "get_weather")
+    }
+
+    @Test("a functionCall part is not also emitted as text")
+    func functionCallIsNotText() async throws {
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{}}}],"role":"model"}}]}"#, "",
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ])
+
+        let events = try await collect(GeminiProvider(apiKey: key, client: client))
+        #expect(!events.contains { if case .textDelta = $0 { return true }; return false })
+    }
+
+    @Test("sends a tool result back as a functionResponse in a user turn")
+    func encodesToolResult() async throws {
+        let recorder = RequestRecorder()
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ], recorder: recorder)
+
+        let call = ToolCall(id: "call-1", name: "get_weather",
+                            arguments: Data(#"{"city":"Paris"}"#.utf8))
+        let request = AssistantRequest(model: "m", messages: [
+            ChatMessage(role: .user, text: "weather?"),
+            ChatMessage(role: .assistant, parts: [.toolCall(call)]),
+            ChatMessage(role: .user, parts: [.toolResult(
+                ToolResult(callID: "call-1", name: "get_weather", content: "17C")
+            )]),
+        ], tools: [Self.weather])
+
+        _ = try await collect(GeminiProvider(apiKey: key, client: client), request: request)
+
+        let json = try await sentBody(recorder)
+        let contents = try #require(json["contents"] as? [[String: Any]])
+        #expect(contents.count == 3)
+
+        // The model's own call is replayed under the model role.
+        #expect(contents[1]["role"] as? String == "model")
+        let callPart = try #require((contents[1]["parts"] as? [[String: Any]])?.first)
+        let functionCall = try #require(callPart["functionCall"] as? [String: Any])
+        #expect(functionCall["name"] as? String == "get_weather")
+        #expect(functionCall["id"] as? String == "call-1")
+        // Arguments survive the round trip unchanged.
+        #expect((functionCall["args"] as? [String: Any])?["city"] as? String == "Paris")
+
+        // Gemini allows only "user" or "model", so a result travels as user.
+        #expect(contents[2]["role"] as? String == "user")
+        let resultPart = try #require((contents[2]["parts"] as? [[String: Any]])?.first)
+        let response = try #require(resultPart["functionResponse"] as? [String: Any])
+        #expect(response["name"] as? String == "get_weather")
+        #expect(response["id"] as? String == "call-1")
+        #expect((response["response"] as? [String: Any])?["result"] as? String == "17C")
+    }
+
+    @Test("a failed tool is reported to the model as an error payload")
+    func encodesToolError() async throws {
+        let recorder = RequestRecorder()
+        let client = FixtureClient(lines: [
+            #"data: {"candidates":[{"finishReason":"STOP"}]}"#, "",
+        ], recorder: recorder)
+
+        let request = AssistantRequest(model: "m", messages: [
+            ChatMessage(role: .user, parts: [.toolResult(
+                ToolResult(callID: nil, name: "get_weather", content: "network down", isError: true)
+            )]),
+        ], tools: [Self.weather])
+
+        _ = try await collect(GeminiProvider(apiKey: key, client: client), request: request)
+
+        let json = try await sentBody(recorder)
+        let contents = try #require(json["contents"] as? [[String: Any]])
+        let part = try #require((contents[0]["parts"] as? [[String: Any]])?.first)
+        let response = try #require(part["functionResponse"] as? [String: Any])
+        // A model that cannot tell "no results" from "the tool broke" invents
+        // the answer, so the distinction is carried in the payload.
+        #expect((response["response"] as? [String: Any])?["error"] as? String == "network down")
+        #expect(response["id"] == nil)
+    }
+}

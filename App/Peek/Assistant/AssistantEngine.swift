@@ -14,10 +14,27 @@ final class AssistantEngine {
 
     private let settings: AppSettings
     private let secrets: SecretStore
+    /// Needed by the conversation-search tool. Optional so the engine can be
+    /// built before persistence is ready, in which case tools are simply not
+    /// offered rather than half-offered.
+    private let store: ConversationStore?
 
-    init(settings: AppSettings, secrets: SecretStore = KeychainSecretStore()) {
+    init(settings: AppSettings,
+         secrets: SecretStore = KeychainSecretStore(),
+         store: ConversationStore? = nil) {
         self.settings = settings
         self.secrets = secrets
+        self.store = store
+    }
+
+    /// The tools to offer this turn, or none.
+    ///
+    /// Read on the main actor and frozen into the executor, so a switch the
+    /// user flips mid-turn cannot change what runs for the rest of it.
+    private func toolExecutor() -> PeekToolExecutor? {
+        guard settings.toolsEnabled, let store else { return nil }
+        return PeekToolExecutor(store: store,
+                                allowWebFetch: settings.webFetchToolEnabled)
     }
 
     var selectedModelID: String { settings.modelID }
@@ -106,11 +123,28 @@ final class AssistantEngine {
             // No retry wrapper: an on-device failure is a device or setting
             // problem, not a transient network one, so retrying only delays
             // the explanation.
+            //
+            // No tool wrapper either, and not an oversight: Foundation Models
+            // calls Swift tools inside its own session rather than reporting
+            // them as stream events, and it streams cumulative snapshots that
+            // a second round would overwrite. Giving the on-device model tools
+            // means translating to its native `Tool` protocol, which is its
+            // own piece of work.
             return AppleIntelligenceProvider()
         case .gemini:
-            return RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider))
+            return withTools(RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider)))
         default:
-            return RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider))
+            return withTools(RetryingProvider(wrapping: GeminiProvider(apiKey: keyProvider)))
         }
+    }
+
+    /// Wraps a provider in the tool loop, when there are tools to offer.
+    ///
+    /// Outside the retry wrapper on purpose: a retry belongs to a single
+    /// request, while a tool round is a new request that should get its own
+    /// retries rather than re-running the whole loop.
+    private func withTools(_ provider: any AssistantProvider) -> any AssistantProvider {
+        guard let executor = toolExecutor() else { return provider }
+        return ToolUsingProvider(wrapping: provider, executor: executor)
     }
 }

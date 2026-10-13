@@ -26,6 +26,7 @@ leaves the machine — and can use a cloud provider when you want a larger model
 | Changes your text | no | fix grammar, improve writing, make it shorter |
 | Screenshots | no | attach a region or the whole screen |
 | Asking out loud | no | dictate your question, transcribed on-device |
+| Looking things up | no | searches your past answers; fetches a page if you allow it |
 | History | none | searchable and persistent |
 | Invoked by | Force Click | Force Click, a global shortcut, the Services menu, or the menu bar |
 
@@ -98,6 +99,10 @@ Peek never reads from a deny-listed app, and never from a secure text field.
   anywhere unless you choose a cloud provider.
 - **Dictation never leaves your Mac.** Speech is transcribed by Apple's
   on-device models; no audio is recorded, stored or uploaded.
+- **Tools are opt-in where they reach outward.** Searching your own history is
+  local. Fetching a web page is off by default, and when on it is restricted to
+  https and refuses local and private addresses, so nothing on your machine or
+  network is reachable that way.
 - **API keys live in the Keychain** — never in preferences, never on disk in
   plain text, never in logs. Settings only ever shows a masked value.
 - **No telemetry.** Selected text and screenshots go to the provider you
