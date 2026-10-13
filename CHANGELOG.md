@@ -19,13 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first use, and Peek says so while it waits rather than appearing to hang.
 - Refusing the microphone, or dictating in a language the models do not cover,
   says so and leaves typing entirely unaffected.
-
-### Fixed
-
-- Dictation now works on a Mac whose language and region disagree — US English
-  set in India, for instance. Such a system reports a locale identifier
-  carrying a region override, which matches nothing in the recogniser's list of
-  supported languages, so matching now ignores those extensions.
+- Dictation works on a Mac whose language and region disagree — US English set
+  in India, for instance — where the system's own locale identifier matches
+  nothing in the recogniser's list of supported languages.
 
 ## [0.7.0] - 2026-10-12
 
