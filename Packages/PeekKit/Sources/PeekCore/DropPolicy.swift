@@ -66,7 +66,8 @@ public enum DropPolicy {
             return "Peek can read text, images and PDFs."
         case .text where byteCount > maxTextFileBytes:
             return "That text file is too large to read."
-        case .image, .pdf where byteCount > maxImageFileBytes:
+        case .image where byteCount > maxImageFileBytes,
+             .pdf where byteCount > maxImageFileBytes:
             return "That file is too large to open."
         default:
             return "That file is empty."
