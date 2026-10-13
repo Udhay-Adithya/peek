@@ -105,6 +105,24 @@ public struct GeminiProvider: AssistantProvider {
 
             if let candidate = chunk.candidates?.first {
                 for part in candidate.content?.parts ?? [] {
+                    // Known limitation: a thinking model also returns a
+                    // `thoughtSignature` beside the call, which Google asks to
+                    // be replayed in later requests to preserve the thinking
+                    // context. It is dropped here. A live round trip without
+                    // it was verified to work and answer correctly, so this
+                    // costs quality on thinking models at worst, not
+                    // correctness. Carrying it would mean a provider-specific
+                    // field in the neutral ``ToolCall``.
+                    if let call = part.functionCall {
+                        continuation.yield(.toolCall(ToolCall(
+                            // Gemini omits the id on some models; the name is
+                            // what the response must match on in that case.
+                            id: call.id ?? "",
+                            name: call.name,
+                            arguments: call.args?.rawJSON ?? Data("{}".utf8)
+                        )))
+                        continue
+                    }
                     guard let text = part.text, !text.isEmpty else { continue }
                     // Gemini marks chain-of-thought parts with `thought: true`.
                     // Keeping them out of the visible transcript matters: they
@@ -193,7 +211,10 @@ public struct GeminiProvider: AssistantProvider {
             generationConfig: GeminiGenerationConfig(
                 temperature: request.temperature,
                 maxOutputTokens: request.maxOutputTokens
-            )
+            ),
+            tools: request.tools.isEmpty ? nil : [GeminiTool(
+                functionDeclarations: request.tools.map(Self.declare)
+            )]
         )
 
         return HTTPRequestSpec(
@@ -210,8 +231,24 @@ public struct GeminiProvider: AssistantProvider {
         )
     }
 
+    private static func declare(_ tool: ToolDefinition) -> GeminiFunctionDeclaration {
+        let required = tool.parameters.filter(\.isRequired).map(\.name)
+        return GeminiFunctionDeclaration(
+            name: tool.name,
+            description: tool.description,
+            parameters: GeminiSchema(
+                properties: Dictionary(uniqueKeysWithValues: tool.parameters.map {
+                    ($0.name, GeminiProperty(type: $0.kind.rawValue, description: $0.description))
+                }),
+                required: required.isEmpty ? nil : required
+            )
+        )
+    }
+
     private static func encode(_ message: ChatMessage) -> GeminiContent {
         GeminiContent(
+            // A tool result is an input to the model, and Gemini allows only
+            // "user" or "model" here, so it travels as a user turn.
             role: message.role == .user ? "user" : "model",
             parts: message.parts.map { part in
                 switch part {
@@ -221,6 +258,22 @@ public struct GeminiProvider: AssistantProvider {
                     return GeminiPart(inlineData: GeminiInlineData(
                         mimeType: attachment.mimeType,
                         data: attachment.data.base64EncodedString()
+                    ))
+                case .toolCall(let call):
+                    return GeminiPart(functionCall: GeminiFunctionCall(
+                        id: call.id.isEmpty ? nil : call.id,
+                        name: call.name,
+                        args: JSONValue(rawJSON: call.arguments)
+                    ))
+                case .toolResult(let result):
+                    // The error flag is carried in the payload the model reads;
+                    // Gemini has no separate channel for it.
+                    return GeminiPart(functionResponse: GeminiFunctionResponse(
+                        id: result.callID,
+                        name: result.name,
+                        response: result.isError
+                            ? ["error": result.content]
+                            : ["result": result.content]
                     ))
                 }
             }
@@ -250,7 +303,13 @@ public struct GeminiProvider: AssistantProvider {
 
     private static func mapFinishReason(_ raw: String) -> FinishReason {
         switch raw.uppercased() {
+        // Measured, not assumed: when the model calls a tool, Gemini sends
+        // `finishReason: "STOP"` with `finishMessage: "Model generated
+        // function call(s)."` — not a tool-specific reason. These two are
+        // tolerated in case that changes, but nothing depends on them: the
+        // tool loop keys off whether any call was decoded, not the reason.
         case "STOP":         return .stop
+        case "TOOL_CALLS", "FUNCTION_CALL": return .toolCalls
         case "MAX_TOKENS":   return .maxTokens
         case "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII":
             return .contentFilter
@@ -265,6 +324,32 @@ private struct GeminiRequestBody: Encodable {
     let contents: [GeminiContent]
     let systemInstruction: GeminiContent?
     let generationConfig: GeminiGenerationConfig?
+    /// Omitted entirely when no tools are offered: sending an empty `tools`
+    /// array is not the same request as sending none.
+    let tools: [GeminiTool]?
+}
+
+private struct GeminiTool: Encodable {
+    let functionDeclarations: [GeminiFunctionDeclaration]
+}
+
+private struct GeminiFunctionDeclaration: Encodable {
+    let name: String
+    let description: String
+    let parameters: GeminiSchema
+}
+
+/// The JSON Schema subset Gemini wants for a tool's arguments.
+private struct GeminiSchema: Encodable {
+    let type = "object"
+    let properties: [String: GeminiProperty]
+    /// Omitted when empty — Gemini rejects `required: []` on some models.
+    let required: [String]?
+}
+
+private struct GeminiProperty: Encodable {
+    let type: String
+    let description: String
 }
 
 private struct GeminiContent: Encodable {
@@ -275,6 +360,24 @@ private struct GeminiContent: Encodable {
 private struct GeminiPart: Encodable {
     var text: String?
     var inlineData: GeminiInlineData?
+    var functionCall: GeminiFunctionCall?
+    var functionResponse: GeminiFunctionResponse?
+}
+
+private struct GeminiFunctionCall: Encodable {
+    let id: String?
+    let name: String
+    /// Replayed verbatim as the model produced it. Decoding and re-encoding
+    /// the arguments risks changing them, and the model is entitled to see its
+    /// own call unchanged.
+    let args: JSONValue?
+}
+
+private struct GeminiFunctionResponse: Encodable {
+    let id: String?
+    let name: String
+    /// Gemini requires an object here, so a tool's text is wrapped in one.
+    let response: [String: String]
 }
 
 private struct GeminiInlineData: Encodable {
@@ -305,6 +408,15 @@ private struct GeminiResponseContent: Decodable {
 private struct GeminiResponsePart: Decodable {
     let text: String?
     let thought: Bool?
+    let functionCall: GeminiResponseFunctionCall?
+}
+
+private struct GeminiResponseFunctionCall: Decodable {
+    let id: String?
+    let name: String
+    /// Kept as raw JSON: ``ToolCall`` carries undecoded arguments so the tool
+    /// that owns the schema decodes them, not this adapter.
+    let args: JSONValue?
 }
 
 private struct GeminiUsage: Decodable {
