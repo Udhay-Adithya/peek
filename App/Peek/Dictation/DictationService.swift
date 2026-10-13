@@ -55,24 +55,18 @@ final class DictationService: DictationServing {
     private var inputStream: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
 
+    /// There is deliberately no `deinit` teardown. An `isolated deinit` plants
+    /// an executor assertion in a function ARC may run from any thread — the
+    /// same trap that the audio tap hit — and it buys nothing here: every
+    /// user-visible path calls ``stop()``, and releasing `engine` closes the
+    /// microphone regardless.
+    ///
     /// Text accumulated across finalized segments.
     ///
     /// Progressive results replace the volatile tail repeatedly, so finalized
     /// text is kept separately — otherwise each update would overwrite
     /// everything said so far.
     private var finalizedText = ""
-
-    /// Tears the audio graph down if the service is released while listening.
-    ///
-    /// Deliberately not a call to ``stop()``: that schedules a task, and
-    /// escaping `self` from a deinit is unsound. Releasing the engine is what
-    /// actually closes the microphone.
-    isolated deinit {
-        resultsTask?.cancel()
-        inputStream?.finish()
-        engine?.inputNode.removeTap(onBus: 0)
-        engine?.stop()
-    }
 
     func start() async {
         guard case .idle = state else { return }
@@ -92,6 +86,12 @@ final class DictationService: DictationServing {
             return
         }
 
+        // `.progressiveShortDictation` is `shortForm` + `punctuation` +
+        // `volatileResults` + `frequentFinalization` (read off the preset
+        // itself, not assumed). The hint suits a question, and frequent
+        // finalization settles the composer text quickly. No preset imposes a
+        // time limit — "short" is a hint to the model, not a cutoff — so a
+        // longer question is not truncated.
         let transcriber = DictationTranscriber(locale: locale,
                                                preset: .progressiveShortDictation)
         self.transcriber = transcriber
@@ -178,7 +178,12 @@ final class DictationService: DictationServing {
             Self.logger.error("no converter from input format; feeding microphone format directly")
         }
 
-        engine.inputNode.installTap(onBus: 0, bufferSize: 4_096, format: format) { buffer, _ in
+        // `@Sendable` is load-bearing, not decoration. Without it the closure
+        // inherits this type's `@MainActor` isolation, and the compiler plants
+        // an "am I on the main actor?" assertion inside it. Core Audio calls a
+        // tap on a realtime thread, so the first buffer trips that assertion
+        // and traps — the app dies the instant dictation starts listening.
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4_096, format: format) { @Sendable buffer, _ in
             guard let converter else {
                 continuation.yield(AnalyzerInput(buffer: buffer))
                 return
